@@ -14,11 +14,9 @@ class MapScreen extends StatelessWidget {
           zoom: 13.0,
         ),
         children: [
-          TileLayerWidget(
-            options: TileLayerOptions(
-              urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-              subdomains: ['a', 'b', 'c'],
-            ),
+          TileLayer(
+            urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            subdomains: ['a', 'b', 'c'],
           ),
         ],
       ),
