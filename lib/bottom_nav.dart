@@ -7,7 +7,7 @@ import 'screens/settings_screen.dart';
 class AppBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
 
-  AppBottomNavigationBar(this.currentIndex);
+  const AppBottomNavigationBar(this.currentIndex, {super.key});
 
   void onTabTapped(BuildContext context, int index) {
     switch (index) {
