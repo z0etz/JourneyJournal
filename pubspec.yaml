@@ -38,6 +38,9 @@ cupertino_icons: ^1.0.8
 # Flutter Map package for route visualization
 flutter_map: ^0.14.0
 
+# For working with geographical points
+latlong2: ^0.8.1
+
 # Calendar widget for viewing dates and associated route points
 table_calendar: ^3.0.2
 
@@ -58,6 +61,8 @@ flutter_ffmpeg: ^4.5.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  build_runner: ^2.1.7
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
