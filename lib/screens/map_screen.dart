@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_dragmarker/flutter_map_dragmarker.dart';
@@ -14,11 +15,65 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   List<LatLng> routePoints = []; // This will store your route points (markers)
 
+  // Method to calculate distance between two points
+  double distance(LatLng point1, LatLng point2) {
+    return sqrt(
+      pow(point2.latitude - point1.latitude, 2) +
+          pow(point2.longitude - point1.longitude, 2),
+    );
+  }
+
   // Add marker at tapped location
   void _addMarker(LatLng point) {
-    setState(() {
-      routePoints.add(point);
-    });
+    if (routePoints.isEmpty) {
+      setState(() {
+        routePoints.add(point);
+      });
+      return;
+    }
+
+    // Check if the tapped point is close to any of the segments in the polyline
+    bool inserted = false;
+    for (int i = 0; i < routePoints.length - 1; i++) {
+      // Check distance to each line segment
+      LatLng p1 = routePoints[i];
+      LatLng p2 = routePoints[i + 1];
+
+      // You can adjust this threshold value as needed
+      double threshold = 0.001; // Roughly equivalent to ~100 meters in Lat/Lng degrees
+
+      // Calculate the distance to the line segment using your custom logic
+      double distToSegment = _distanceToSegment(point, p1, p2);
+      if (distToSegment < threshold) {
+        // Insert marker in the middle of the segment
+        setState(() {
+          routePoints.insert(i + 1, point); // Add marker between the two points
+        });
+        inserted = true;
+        break;
+      }
+    }
+
+    // If the point was not close to any segment, add it at the end
+    if (!inserted) {
+      setState(() {
+        routePoints.add(point);
+      });
+    }
+  }
+
+  // Calculate the minimum distance from a point to a line segment
+  double _distanceToSegment(LatLng point, LatLng lineStart, LatLng lineEnd) {
+    double dx = lineEnd.longitude - lineStart.longitude;
+    double dy = lineEnd.latitude - lineStart.latitude;
+    if (dx == 0 && dy == 0) {
+      return distance(point, lineStart); // Handle the case when the line is a single point
+    }
+
+    double t = ((point.longitude - lineStart.longitude) * dx + (point.latitude - lineStart.latitude) * dy) / (dx * dx + dy * dy);
+    t = t.clamp(0.0, 1.0); // Clamp t to stay between 0 and 1 to ensure it's on the segment
+    LatLng closestPoint = LatLng(lineStart.latitude + t * dy, lineStart.longitude + t * dx);
+    return distance(point, closestPoint);
   }
 
   // Create a list of DragMarkers with custom appearance
@@ -37,27 +92,27 @@ class _MapScreenState extends State<MapScreen> {
                 routePoints.remove(point);  // Remove the tapped marker from the list
               });
             },
-              child: Opacity(
-                opacity: isDragging ? 0.5 : 0.7, // Change opacity while dragging
-                  child: Align(
-                  alignment: Alignment.center, // Align to center at the point
-                    child: Transform.translate(
-                      offset: const Offset(0, 20), // Apply the vertical offset here
-                      child: Icon(
-                        // Custom marker icons based on index
-                        routePoints.indexOf(point) == 0
-                            ? Icons.trip_origin // Start point
-                            : routePoints.indexOf(point) == routePoints.length - 1
-                            ? Icons.flag_circle // End point
-                            : Icons.circle, // Regular markers
-                        size: isDragging ? 65 : 40, // Change size during dragging
-                        color: routePoints.indexOf(point) == 0
-                            ? const Color(0xFF4c8d40) // Start point color
-                            : routePoints.indexOf(point) == routePoints.length - 1
-                            ? const Color(0xFFde3a71) // End point color
-                            : Colors.blue, // Regular marker color
-                      ),
-                    ),
+            child: Opacity(
+              opacity: isDragging ? 0.5 : 0.7, // Change opacity while dragging
+              child: Align(
+                alignment: Alignment.center, // Align to center at the point
+                child: Transform.translate(
+                  offset: const Offset(0, 20), // Apply the vertical offset here
+                  child: Icon(
+                    // Custom marker icons based on index
+                    routePoints.indexOf(point) == 0
+                        ? Icons.trip_origin // Start point
+                        : routePoints.indexOf(point) == routePoints.length - 1
+                        ? Icons.flag_circle // End point
+                        : Icons.circle, // Regular markers
+                    size: isDragging ? 65 : 40, // Change size during dragging
+                    color: routePoints.indexOf(point) == 0
+                        ? const Color(0xFF4c8d40) // Start point color
+                        : routePoints.indexOf(point) == routePoints.length - 1
+                        ? const Color(0xFFde3a71) // End point color
+                        : Colors.blue, // Regular marker color
+                  ),
+                ),
               ),
             ),
           );
