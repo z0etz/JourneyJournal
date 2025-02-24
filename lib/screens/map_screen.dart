@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_dragmarker/flutter_map_dragmarker.dart';
 import 'package:latlong2/latlong.dart';
 import '../utils/map_utils.dart';
+import '../models/route_point.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -117,18 +118,32 @@ class _MapScreenState extends State<MapScreen> {
                 },
               );
             },
-            child: Icon(
-              routePoints.indexOf(routePoint) == 0
-                  ? Icons.trip_origin
-                  : routePoints.indexOf(routePoint) == routePoints.length - 1
-                  ? Icons.flag_circle
-                  : Icons.circle,
-              size: isDragging ? 65 : 40,
-              color: routePoints.indexOf(routePoint) == 0
-                  ? const Color(0xFF4c8d40)
-                  : routePoints.indexOf(routePoint) == routePoints.length - 1
-                  ? const Color(0xFFde3a71)
-                  : Colors.blue,
+            child: Column(
+              children: [
+                Icon(
+                  routePoints.indexOf(routePoint) == 0
+                      ? Icons.trip_origin
+                      : routePoints.indexOf(routePoint) == routePoints.length - 1
+                      ? Icons.flag_circle
+                      : Icons.circle,
+                  size: isDragging ? 65 : 40,
+                  color: routePoints.indexOf(routePoint) == 0
+                      ? const Color(0xFF4c8d40)
+                      : routePoints.indexOf(routePoint) == routePoints.length - 1
+                      ? const Color(0xFFde3a71)
+                      : Colors.blue,
+                ),
+                // Display title below the marker
+                if (routePoint.title.isNotEmpty)
+                  Text(
+                    routePoint.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Colors.black,
+                    ),
+                  ),
+              ],
             ),
           );
         },
@@ -140,27 +155,6 @@ class _MapScreenState extends State<MapScreen> {
       );
     }).toList();
   }
-
-  // // Build the list of titles as separate widgets
-  // List<Widget> _buildTitleWidgets() {
-  //   return routePoints.map((routePoint) {
-  //     return Positioned(
-  //       top: _getYPosition(routePoint.point),  // Map this to the correct Y position
-  //       left: _getXPosition(routePoint.point), // Map this to the correct X position
-  //       child: Material(
-  //         color: Colors.transparent,
-  //         child: Text(
-  //           routePoint.title,
-  //           style: const TextStyle(
-  //             color: Colors.black,
-  //             fontWeight: FontWeight.bold,
-  //             fontSize: 16,
-  //           ),
-  //         ),
-  //       ),
-  //     );
-  //   }).toList();
-  // }
 
   @override
   Widget build(BuildContext context) {
@@ -190,7 +184,7 @@ class _MapScreenState extends State<MapScreen> {
             PolylineLayer(
               polylines: [
                 Polyline(
-                  points: routePoints.map((routePoint) => routePoint.point).toList(), // Convert RoutePoint to LatLng
+                  points: routePoints.map((routePoint) => routePoint.point).toList(),
                   color: Colors.blue.withValues(alpha: 0.7),
                   strokeWidth: 4.0,
                 ),
@@ -199,20 +193,8 @@ class _MapScreenState extends State<MapScreen> {
           DragMarkers(
             markers: _buildDragMarkers(),
           ),
-          // Add the separate layer for titles
-          // Stack(
-          //   children: _buildTitleWidgets(),
-          // ),
         ],
       ),
     );
   }
-}
-
-class RoutePoint {
-  LatLng point;
-  String title = '';
-  String date = '';
-
-  RoutePoint({required this.point});
 }
