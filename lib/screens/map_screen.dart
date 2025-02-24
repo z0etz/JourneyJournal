@@ -65,6 +65,26 @@ class _MapScreenState extends State<MapScreen> {
                 routePoints.remove(point);
               });
             },
+            onLongPress: () {
+              // Show a dialog on long press
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text("Marker Options"),
+                    content: const Text("Here you can add settings later."),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(); // Close the dialog
+                        },
+                        child: const Text("Close"),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
             child: Opacity(
               opacity: isDragging ? 0.5 : 0.7,
               child: Icon(
