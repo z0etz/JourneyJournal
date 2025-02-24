@@ -121,6 +121,28 @@ class _MapScreenState extends State<MapScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
+                // Title (closer to circle)
+                if (routePoint.title.isNotEmpty)
+                  Positioned(
+                    bottom: 1, // Reduce this value to move the title further down the circle
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.5), // Semi-transparent background
+                        borderRadius: BorderRadius.circular(8), // Rounded edges for a softer look
+                      ),
+                      child: Text(
+                        routePoint.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
                 // Circle icon
                 Icon(
                   routePoints.indexOf(routePoint) == 0
@@ -135,24 +157,6 @@ class _MapScreenState extends State<MapScreen> {
                       ? const Color(0xFFde3a71)
                       : Colors.blue,
                 ),
-                // Title (closer to circle)
-                if (routePoint.title.isNotEmpty)
-                  Positioned(
-                    bottom: 1, // Reduce this value to move the title further down the circle
-                    child: Container(
-                      constraints: BoxConstraints(maxHeight: 30),
-                      child: Text(
-                        routePoint.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.black,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ),
               ],
             ),
           );
