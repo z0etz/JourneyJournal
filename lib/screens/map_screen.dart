@@ -58,7 +58,7 @@ class _MapScreenState extends State<MapScreen> {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
         point: routePoint.point,
-        size: const Size(40, 40),
+        size: const Size(80, 80),
         builder: (_, __, isDragging) {
           return GestureDetector(
             onTap: () {
@@ -78,7 +78,7 @@ class _MapScreenState extends State<MapScreen> {
                       return AlertDialog(
                         title: const Text("Marker Options"),
                         content: Column(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisSize: MainAxisSize.min,  // Ensures the Column only takes as much space as needed
                           children: [
                             TextField(
                               controller: titleController,
@@ -118,8 +118,10 @@ class _MapScreenState extends State<MapScreen> {
                 },
               );
             },
-            child: Column(
+            child: Stack(
+              alignment: Alignment.center,
               children: [
+                // Circle icon
                 Icon(
                   routePoints.indexOf(routePoint) == 0
                       ? Icons.trip_origin
@@ -133,14 +135,22 @@ class _MapScreenState extends State<MapScreen> {
                       ? const Color(0xFFde3a71)
                       : Colors.blue,
                 ),
-                // Display title below the marker
+                // Title (closer to circle)
                 if (routePoint.title.isNotEmpty)
-                  Text(
-                    routePoint.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.black,
+                  Positioned(
+                    bottom: 1, // Reduce this value to move the title further down the circle
+                    child: Container(
+                      constraints: BoxConstraints(maxHeight: 30),
+                      child: Text(
+                        routePoint.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
                   ),
               ],
