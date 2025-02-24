@@ -58,7 +58,7 @@ class _MapScreenState extends State<MapScreen> {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
         point: routePoint.point,
-        size: const Size(120, 80),
+        size: const Size(160, 80),
         builder: (_, __, isDragging) {
           return GestureDetector(
             onTap: () {
