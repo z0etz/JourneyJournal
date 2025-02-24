@@ -58,7 +58,7 @@ class _MapScreenState extends State<MapScreen> {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
         point: routePoint.point,
-        size: const Size(80, 80),
+        size: const Size(120, 80),
         builder: (_, __, isDragging) {
           return GestureDetector(
             onTap: () {
@@ -128,7 +128,7 @@ class _MapScreenState extends State<MapScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.5), // Semi-transparent background
+                        color: Colors.white.withValues(alpha: 0.8), // Semi-transparent background
                         borderRadius: BorderRadius.circular(8), // Rounded edges for a softer look
                       ),
                       child: Text(
