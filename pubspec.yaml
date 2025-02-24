@@ -32,7 +32,9 @@ dependencies:
     sdk: flutter
 
   # Flutter Map package for route visualization
-  flutter_map: ^5.0.0
+  flutter_map: ^8.0.0
+
+  flutter_map_dragmarker: ^8.0.0
 
   # For working with geographical points
   latlong2: ^0.9.1

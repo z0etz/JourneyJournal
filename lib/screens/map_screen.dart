@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -33,10 +34,10 @@ class _MapScreenState extends State<MapScreen> {
       body: FlutterMap(
         mapController: _mapController,
         options: MapOptions(
-          center: LatLng(51.509364, -0.128928), // Default center
-          zoom: 13.0,
-          rotation: 0.0, // Lock north up (rotation locked)
-          interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate, // Disable map rotation
+          initialCenter: LatLng(59.3325, 18.065), // Default center
+          initialZoom: 10.0,                     // Default zoom
+          interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag),
           onTap: (tapPosition, point) {
             // Add a marker when the map is tapped
             _addMarker(point);
@@ -44,14 +45,14 @@ class _MapScreenState extends State<MapScreen> {
         ),
         children: [
           TileLayer(
-            urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            subdomains: ['a', 'b', 'c'],
+            urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", // OSM Tile URL without subdomains
           ),
+          if (routePoints.isNotEmpty)
           PolylineLayer(
             polylines: [
               Polyline(
                 points: routePoints,
-                color: Colors.blue,
+                color: Colors.blue.withValues(alpha: 0.7), // Using .withValues() for opacity
                 strokeWidth: 4.0,
               ),
             ],
@@ -64,23 +65,29 @@ class _MapScreenState extends State<MapScreen> {
                   point: point,
                   width: 40,
                   height: 40,
-                  builder: (ctx) => GestureDetector(
+                  // Set the position of the marker
+                  alignment: Alignment.center,
+                  // Create custom marker widget here
+                  child: GestureDetector(
                     onTap: () {
                       // Remove marker when tapped
                       _removeMarker(index);
                     },
-                    child: Icon(
-                      index == 0
-                          ? Icons.flag // Start point icon
-                          : (index == routePoints.length - 1
-                          ? Icons.flag_outlined // End point icon
-                          : Icons.circle), // Regular markers
-                      color: index == 0
-                          ? Colors.green // Start point color
-                          : (index == routePoints.length - 1
-                          ? Colors.red // End point color
-                          : Colors.blue), // Regular marker color
-                      size: 30,
+                    child: Opacity(
+                      opacity: 0.7, // Adjust this value for desired opacity (0.0 to 1.0)
+                      child: Icon(
+                        index == 0
+                            ? Icons.trip_origin // Start point icon
+                            : (index == routePoints.length - 1
+                            ? Icons.flag_circle // End point icon
+                            : Icons.circle), // Regular markers
+                        color: index == 0
+                            ? const Color(0xFF4c8d40) // Start point color
+                            : (index == routePoints.length - 1
+                            ? const Color(0xFFde3a71) // End point color
+                            : Colors.blue), // Regular marker color
+                        size: 30,
+                      ),
                     ),
                   ),
                 ),
