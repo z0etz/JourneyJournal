@@ -14,6 +14,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   List<LatLng> routePoints = []; // This will store your route points (markers)
+  double zoomLevel = 10.0;
 
   // Method to calculate distance between two points
   double distance(LatLng point1, LatLng point2) {
@@ -40,7 +41,7 @@ class _MapScreenState extends State<MapScreen> {
       LatLng p2 = routePoints[i + 1];
 
       // You can adjust this threshold value as needed
-      double threshold = 0.001; // Roughly equivalent to ~100 meters in Lat/Lng degrees
+      double threshold = 0.0002 * pow(2, (15 - zoomLevel));  // Set threshold for adding points between points relative to zoom level
 
       // Calculate the distance to the line segment using your custom logic
       double distToSegment = _distanceToSegment(point, p1, p2);
@@ -135,6 +136,11 @@ class _MapScreenState extends State<MapScreen> {
         options: MapOptions(
           initialCenter: LatLng(59.3325, 18.065), // Default center
           initialZoom: 10.0, // Default zoom
+          onPositionChanged: (position, hasGesture) {
+            setState(() {
+              zoomLevel = position.zoom; // Update zoomLevel on zoom changes
+            });
+          },
           interactionOptions: const InteractionOptions(
             flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
           ),
@@ -167,3 +173,4 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 }
+
