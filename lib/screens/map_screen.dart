@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_dragmarker/flutter_map_dragmarker.dart';
 import 'package:latlong2/latlong.dart';
 import '../utils/map_utils.dart';
+import '../models/route_point.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -13,30 +14,31 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
-  List<LatLng> routePoints = [];
+  List<RoutePoint> routePoints = [];
   double zoomLevel = 10.0;
 
   // Add marker at tapped location
   void _addMarker(LatLng point) {
+    RoutePoint newRoutePoint = RoutePoint(point: point);
+
     if (routePoints.isEmpty) {
       setState(() {
-        routePoints.add(point);
+        routePoints.add(newRoutePoint);
       });
       return;
     }
 
-    // Check if the tapped point is close to any of the segments in the polyline
     bool inserted = false;
     for (int i = 0; i < routePoints.length - 1; i++) {
-      LatLng p1 = routePoints[i];
-      LatLng p2 = routePoints[i + 1];
+      LatLng p1 = routePoints[i].point;
+      LatLng p2 = routePoints[i + 1].point;
 
       double threshold = getThreshold(zoomLevel);
-
       double distToSegment = distanceToSegment(point, p1, p2);
+
       if (distToSegment < threshold) {
         setState(() {
-          routePoints.insert(i + 1, point);
+          routePoints.insert(i + 1, newRoutePoint);
         });
         inserted = true;
         break;
@@ -45,47 +47,123 @@ class _MapScreenState extends State<MapScreen> {
 
     if (!inserted) {
       setState(() {
-        routePoints.add(point);
+        routePoints.add(newRoutePoint);
       });
     }
   }
 
-  // Create a list of DragMarkers with custom appearance
+  // Create list of DragMarkers
   List<DragMarker> _buildDragMarkers() {
-    return routePoints.map((point) {
+    return routePoints.map((routePoint) {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
-        point: point,
-        size: const Size(40, 40),
+        point: routePoint.point,
+        size: const Size(160, 80),
         builder: (_, __, isDragging) {
           return GestureDetector(
             onTap: () {
-              // Remove the marker on tap
               setState(() {
-                routePoints.remove(point);
+                routePoints.remove(routePoint);
               });
             },
-            child: Opacity(
-              opacity: isDragging ? 0.5 : 0.7,
-              child: Icon(
-                routePoints.indexOf(point) == 0
-                    ? Icons.trip_origin
-                    : routePoints.indexOf(point) == routePoints.length - 1
-                    ? Icons.flag_circle
-                    : Icons.circle,
-                size: isDragging ? 65 : 40,
-                color: routePoints.indexOf(point) == 0
-                    ? const Color(0xFF4c8d40)
-                    : routePoints.indexOf(point) == routePoints.length - 1
-                    ? const Color(0xFFde3a71)
-                    : Colors.blue,
-              ),
+            onLongPress: () {
+              TextEditingController titleController = TextEditingController(text: routePoint.title);
+              TextEditingController dateController = TextEditingController(text: routePoint.date);
+
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return StatefulBuilder(
+                    builder: (context, setState) {
+                      return AlertDialog(
+                        title: const Text("Marker Options"),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,  // Ensures the Column only takes as much space as needed
+                          children: [
+                            TextField(
+                              controller: titleController,
+                              decoration: const InputDecoration(
+                                labelText: "Title",
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  routePoint.title = value;
+                                });
+                              },
+                            ),
+                            TextField(
+                              controller: dateController,
+                              decoration: const InputDecoration(
+                                labelText: "Date",
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  routePoint.date = value;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text("Close"),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              );
+            },
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Title (closer to circle)
+                if (routePoint.title.isNotEmpty)
+                  Positioned(
+                    bottom: 1, // Reduce this value to move the title further down the circle
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.8), // Semi-transparent background
+                        borderRadius: BorderRadius.circular(8), // Rounded edges for a softer look
+                      ),
+                      child: Text(
+                        routePoint.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
+                // Circle icon
+                Icon(
+                  routePoints.indexOf(routePoint) == 0
+                      ? Icons.trip_origin
+                      : routePoints.indexOf(routePoint) == routePoints.length - 1
+                      ? Icons.flag_circle
+                      : Icons.circle,
+                  size: isDragging ? 65 : 40,
+                  color: routePoints.indexOf(routePoint) == 0
+                      ? const Color(0xFF4c8d40)
+                      : routePoints.indexOf(routePoint) == routePoints.length - 1
+                      ? const Color(0xFFde3a71)
+                      : Colors.blue,
+                ),
+              ],
             ),
           );
         },
         onDragEnd: (details, newPoint) {
           setState(() {
-            routePoints[routePoints.indexOf(point)] = newPoint;
+            routePoint.point = newPoint;
           });
         },
       );
@@ -120,7 +198,7 @@ class _MapScreenState extends State<MapScreen> {
             PolylineLayer(
               polylines: [
                 Polyline(
-                  points: routePoints,
+                  points: routePoints.map((routePoint) => routePoint.point).toList(),
                   color: Colors.blue.withValues(alpha: 0.7),
                   strokeWidth: 4.0,
                 ),
@@ -134,5 +212,3 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 }
-
-
