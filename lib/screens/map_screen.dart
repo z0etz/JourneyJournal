@@ -13,30 +13,31 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
-  List<LatLng> routePoints = [];
+  List<RoutePoint> routePoints = [];
   double zoomLevel = 10.0;
 
   // Add marker at tapped location
   void _addMarker(LatLng point) {
+    RoutePoint newRoutePoint = RoutePoint(point: point);
+
     if (routePoints.isEmpty) {
       setState(() {
-        routePoints.add(point);
+        routePoints.add(newRoutePoint);
       });
       return;
     }
 
-    // Check if the tapped point is close to any of the segments in the polyline
     bool inserted = false;
     for (int i = 0; i < routePoints.length - 1; i++) {
-      LatLng p1 = routePoints[i];
-      LatLng p2 = routePoints[i + 1];
+      LatLng p1 = routePoints[i].point;
+      LatLng p2 = routePoints[i + 1].point;
 
       double threshold = getThreshold(zoomLevel);
-
       double distToSegment = distanceToSegment(point, p1, p2);
+
       if (distToSegment < threshold) {
         setState(() {
-          routePoints.insert(i + 1, point);
+          routePoints.insert(i + 1, newRoutePoint);
         });
         inserted = true;
         break;
@@ -45,72 +46,121 @@ class _MapScreenState extends State<MapScreen> {
 
     if (!inserted) {
       setState(() {
-        routePoints.add(point);
+        routePoints.add(newRoutePoint);
       });
     }
   }
 
-  // Create a list of DragMarkers with custom appearance
+  // Create list of DragMarkers
   List<DragMarker> _buildDragMarkers() {
-    return routePoints.map((point) {
+    return routePoints.map((routePoint) {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
-        point: point,
+        point: routePoint.point,
         size: const Size(40, 40),
         builder: (_, __, isDragging) {
           return GestureDetector(
             onTap: () {
-              // Remove the marker on tap
               setState(() {
-                routePoints.remove(point);
+                routePoints.remove(routePoint);
               });
             },
             onLongPress: () {
-              // Show a dialog on long press
+              TextEditingController titleController = TextEditingController(text: routePoint.title);
+              TextEditingController dateController = TextEditingController(text: routePoint.date);
+
               showDialog(
                 context: context,
                 builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: const Text("Marker Options"),
-                    content: const Text("Here you can add settings later."),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop(); // Close the dialog
-                        },
-                        child: const Text("Close"),
-                      ),
-                    ],
+                  return StatefulBuilder(
+                    builder: (context, setState) {
+                      return AlertDialog(
+                        title: const Text("Marker Options"),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: titleController,
+                              decoration: const InputDecoration(
+                                labelText: "Title",
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  routePoint.title = value;
+                                });
+                              },
+                            ),
+                            TextField(
+                              controller: dateController,
+                              decoration: const InputDecoration(
+                                labelText: "Date",
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  routePoint.date = value;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text("Close"),
+                          ),
+                        ],
+                      );
+                    },
                   );
                 },
               );
             },
-            child: Opacity(
-              opacity: isDragging ? 0.5 : 0.7,
-              child: Icon(
-                routePoints.indexOf(point) == 0
-                    ? Icons.trip_origin
-                    : routePoints.indexOf(point) == routePoints.length - 1
-                    ? Icons.flag_circle
-                    : Icons.circle,
-                size: isDragging ? 65 : 40,
-                color: routePoints.indexOf(point) == 0
-                    ? const Color(0xFF4c8d40)
-                    : routePoints.indexOf(point) == routePoints.length - 1
-                    ? const Color(0xFFde3a71)
-                    : Colors.blue,
-              ),
+            child: Icon(
+              routePoints.indexOf(routePoint) == 0
+                  ? Icons.trip_origin
+                  : routePoints.indexOf(routePoint) == routePoints.length - 1
+                  ? Icons.flag_circle
+                  : Icons.circle,
+              size: isDragging ? 65 : 40,
+              color: routePoints.indexOf(routePoint) == 0
+                  ? const Color(0xFF4c8d40)
+                  : routePoints.indexOf(routePoint) == routePoints.length - 1
+                  ? const Color(0xFFde3a71)
+                  : Colors.blue,
             ),
           );
         },
         onDragEnd: (details, newPoint) {
           setState(() {
-            routePoints[routePoints.indexOf(point)] = newPoint;
+            routePoint.point = newPoint;
           });
         },
       );
     }).toList();
   }
+
+  // // Build the list of titles as separate widgets
+  // List<Widget> _buildTitleWidgets() {
+  //   return routePoints.map((routePoint) {
+  //     return Positioned(
+  //       top: _getYPosition(routePoint.point),  // Map this to the correct Y position
+  //       left: _getXPosition(routePoint.point), // Map this to the correct X position
+  //       child: Material(
+  //         color: Colors.transparent,
+  //         child: Text(
+  //           routePoint.title,
+  //           style: const TextStyle(
+  //             color: Colors.black,
+  //             fontWeight: FontWeight.bold,
+  //             fontSize: 16,
+  //           ),
+  //         ),
+  //       ),
+  //     );
+  //   }).toList();
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +190,7 @@ class _MapScreenState extends State<MapScreen> {
             PolylineLayer(
               polylines: [
                 Polyline(
-                  points: routePoints,
+                  points: routePoints.map((routePoint) => routePoint.point).toList(), // Convert RoutePoint to LatLng
                   color: Colors.blue.withValues(alpha: 0.7),
                   strokeWidth: 4.0,
                 ),
@@ -149,10 +199,20 @@ class _MapScreenState extends State<MapScreen> {
           DragMarkers(
             markers: _buildDragMarkers(),
           ),
+          // Add the separate layer for titles
+          // Stack(
+          //   children: _buildTitleWidgets(),
+          // ),
         ],
       ),
     );
   }
 }
 
+class RoutePoint {
+  LatLng point;
+  String title = '';
+  String date = '';
 
+  RoutePoint({required this.point});
+}
