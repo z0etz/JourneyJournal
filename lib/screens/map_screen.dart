@@ -67,10 +67,8 @@ class _MapScreenState extends State<MapScreen> {
               });
             },
             onLongPress: () {
-              TextEditingController titleController = TextEditingController(
-                  text: routePoint.title);
-              TextEditingController dateController = TextEditingController(
-                  text: routePoint.date);
+              TextEditingController titleController = TextEditingController(text: routePoint.title);
+              DateTime? selectedDate = routePoint.date;
 
               showDialog(
                 context: context,
@@ -81,10 +79,10 @@ class _MapScreenState extends State<MapScreen> {
                         title: const Text("Marker Options"),
                         content: Column(
                           mainAxisSize: MainAxisSize.min,
-                          // Ensures the Column only takes as much space as needed
                           children: [
                             TextField(
                               controller: titleController,
+                              maxLength: 12,
                               decoration: const InputDecoration(
                                 labelText: "Title",
                               ),
@@ -94,16 +92,27 @@ class _MapScreenState extends State<MapScreen> {
                                 });
                               },
                             ),
-                            TextField(
-                              controller: dateController,
-                              decoration: const InputDecoration(
-                                labelText: "Date",
-                              ),
-                              onChanged: (value) {
-                                setState(() {
-                                  routePoint.date = value;
-                                });
+                            TextButton(
+                              onPressed: () async {
+                                DateTime? pickedDate = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDate ?? DateTime.now(),
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (pickedDate != null) {
+                                  setState(() {
+                                    selectedDate = pickedDate;
+                                    routePoint.date = pickedDate;
+                                  });
+                                }
                               },
+                              child: Text(
+                                selectedDate != null
+                                    ? 'Date: ${selectedDate!.toLocal().toString().split(' ')[0]}'
+                                    : 'Select Date',
+                                style: const TextStyle(color: Colors.blue),
+                              ),
                             ),
                           ],
                         ),
@@ -112,14 +121,16 @@ class _MapScreenState extends State<MapScreen> {
                             onPressed: () {
                               Navigator.of(context).pop();
                             },
-                            child: const Text("Close"),
+                            child: const Text("Save"),
                           ),
                         ],
                       );
                     },
                   );
                 },
-              );
+              ).then((_) {
+                setState(() {}); // Refresh UI after dialog is closed
+              });
             },
             child: Stack(
               alignment: Alignment.center,
