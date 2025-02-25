@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/login_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:journeyjournal/models/route.dart';
@@ -6,7 +7,8 @@ import 'package:journeyjournal/models/route.dart';
 
 void main() async {
   await Hive.initFlutter();
-  Hive.registerAdapter(RouteModelAdapter());  // Register adapter
+  Hive.registerAdapter(RouteModelAdapter());  // Register RouteModel adapter
+  Hive.registerAdapter(RoutePointAdapter());  // Register RoutePoint adapter
   await Hive.openBox<RouteModel>('routes');  // Open box for routes
   runApp(const MyApp());
 }

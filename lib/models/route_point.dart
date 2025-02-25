@@ -4,7 +4,7 @@ import 'package:latlong2/latlong.dart';
 part 'route_point.g.dart'; // Add this to generate code for Hive
 
 @HiveType(typeId: 1)  // Assign a unique typeId
-class RoutePoint {
+class RoutePoint extends HiveObject {
   @HiveField(0)
   LatLng point;
 

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_dragmarker/flutter_map_dragmarker.dart';
 import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/main_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
-import 'package:journeyjournal/models/route.dart';
-
+import 'package:journeyjournal/models/route.dart'; // Import the RouteModel
 
 class MapScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -27,19 +27,26 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _loadRoute();
+  }
+
+  Future<void> _loadRoute() async {
     if (widget.initialRoute != null) {
       currentRoute = widget.initialRoute!;
       print("Map screen route: ${widget.initialRoute?.name ?? 'No route'}");
     } else {
-      if (RouteModel.savedRoutes.isEmpty) {
-        currentRoute = RouteModel.createNewRoute();
-        print("Map screen new route: ${widget.initialRoute?.name ?? 'No route'}");
+      // Fetch the saved routes asynchronously
+      var savedRoutes = await RouteModel.loadRoutes();
+      if (savedRoutes.isEmpty) {
+        currentRoute = await RouteModel.createNewRoute(); // Await to create and save a new route
+        print("Map screen new route: No saved routes");
       } else {
-        currentRoute = RouteModel.savedRoutes.last;
-        print("Map screen last route: ${widget.initialRoute?.name ?? 'No route'}");
+        currentRoute = savedRoutes.last;
+        print("Map screen last route: ${savedRoutes.last.name}");
       }
     }
     _routeNameController = TextEditingController(text: currentRoute.name);
+    setState(() {}); // Refresh the UI after loading the route
   }
 
   @override
@@ -56,6 +63,7 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         currentRoute.routePoints.add(newRoutePoint);
       });
+      currentRoute.save();
       return;
     }
 
@@ -238,6 +246,7 @@ class _MapScreenState extends State<MapScreen> {
               setState(() {
                 currentRoute.name = newName;
                 _isEditing = false;
+                currentRoute.save(); // Save updated route
               });
             },
           )
@@ -248,15 +257,9 @@ class _MapScreenState extends State<MapScreen> {
         alignment: Alignment.topLeft,
         minWidth: 0,
         minHeight: 0,
-        maxWidth: MediaQuery
-            .of(context)
-            .size
-            .width + 200,
+        maxWidth: MediaQuery.of(context).size.width + 200,
         // Extra width for overflow
-        maxHeight: MediaQuery
-            .of(context)
-            .size
-            .height + 100,
+        maxHeight: MediaQuery.of(context).size.height + 100,
         // Extra height for overflow
         child: Transform.translate(
           offset: const Offset(-200, -100),
@@ -286,8 +289,7 @@ class _MapScreenState extends State<MapScreen> {
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: currentRoute.routePoints.map((routePoint) => routePoint.point)
-                          .toList(),
+                      points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
                       color: Colors.blue.withAlpha(180),
                       strokeWidth: 4.0,
                     ),
@@ -300,23 +302,24 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Create a new route and add it to the route list
-          RouteModel newRoute = RouteModel.createNewRoute();
+        floatingActionButton: FloatingActionButton(
+          onPressed: () async {
+            // Create the new route and save it
+            RouteModel newRoute = await RouteModel.createNewRoute(); // Await creation and saving
 
-          // Navigate to the newly created route
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => MainScreen(initialRoute: newRoute),
-            ),
-                (Route<dynamic> route) => false, // Removes all previous routes
-          );
-        },
-        child: const Icon(Icons.add),
-      ),
+            // Schedule the navigation after the current frame
+            SchedulerBinding.instance.addPostFrameCallback((_) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MainScreen(initialRoute: newRoute),
+                ),
+                    (Route<dynamic> route) => false, // Removes all previous routes
+              );
+            });
+          },
+          child: const Icon(Icons.add),
+        )
     );
   }
 }
-
