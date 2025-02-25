@@ -18,6 +18,8 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   late RouteModel currentRoute;
+  late TextEditingController _routeNameController;
+  bool _isEditing = false;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -34,6 +36,13 @@ class _MapScreenState extends State<MapScreen> {
         currentRoute = RouteModel.savedRoutes.last;
       }
     }
+    _routeNameController = TextEditingController(text: currentRoute.name);
+  }
+
+  @override
+  void dispose() {
+    _routeNameController.dispose();
+    super.dispose();
   }
 
   // Add marker at tapped location
@@ -212,6 +221,26 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: GestureDetector(
+          onTap: () {
+            setState(() {
+              _isEditing = true;
+            });
+          },
+          child: _isEditing
+              ? TextField(
+            controller: _routeNameController,
+            onSubmitted: (newName) {
+              setState(() {
+                currentRoute.name = newName;
+                _isEditing = false;
+              });
+            },
+          )
+              : Text(currentRoute.name),
+        ),
+      ),
       body: OverflowBox(
         alignment: Alignment.topLeft,
         minWidth: 0,
