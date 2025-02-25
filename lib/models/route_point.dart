@@ -1,13 +1,25 @@
+import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
 
-class RoutePoint {
-  LatLng point;          // Geographical location of the marker
-  String title;          // Title of the marker
-  String description;    // Description of the marker
-  List<String> images;   // List of image URLs (or paths)
-  DateTime? date;        // Date associated with the marker (nullable)
+part 'route_point.g.dart'; // Add this to generate code for Hive
 
-  // Constructor to initialize the RoutePoint
+@HiveType(typeId: 1)  // Assign a unique typeId
+class RoutePoint {
+  @HiveField(0)
+  LatLng point;
+
+  @HiveField(1)
+  String title;
+
+  @HiveField(2)
+  String description;
+
+  @HiveField(3)
+  List<String> images;
+
+  @HiveField(4)
+  DateTime? date;
+
   RoutePoint({
     required this.point,
     this.title = '',
