@@ -29,11 +29,14 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     if (widget.initialRoute != null) {
       currentRoute = widget.initialRoute!;
+      print("Map screen route: ${widget.initialRoute?.name ?? 'No route'}");
     } else {
       if (RouteModel.savedRoutes.isEmpty) {
         currentRoute = RouteModel.createNewRoute();
+        print("Map screen new route: ${widget.initialRoute?.name ?? 'No route'}");
       } else {
         currentRoute = RouteModel.savedRoutes.last;
+        print("Map screen last route: ${widget.initialRoute?.name ?? 'No route'}");
       }
     }
     _routeNameController = TextEditingController(text: currentRoute.name);
