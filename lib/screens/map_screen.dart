@@ -67,8 +67,10 @@ class _MapScreenState extends State<MapScreen> {
               });
             },
             onLongPress: () {
-              TextEditingController titleController = TextEditingController(text: routePoint.title);
-              TextEditingController dateController = TextEditingController(text: routePoint.date);
+              TextEditingController titleController = TextEditingController(
+                  text: routePoint.title);
+              TextEditingController dateController = TextEditingController(
+                  text: routePoint.date);
 
               showDialog(
                 context: context,
@@ -78,7 +80,8 @@ class _MapScreenState extends State<MapScreen> {
                       return AlertDialog(
                         title: const Text("Marker Options"),
                         content: Column(
-                          mainAxisSize: MainAxisSize.min,  // Ensures the Column only takes as much space as needed
+                          mainAxisSize: MainAxisSize.min,
+                          // Ensures the Column only takes as much space as needed
                           children: [
                             TextField(
                               controller: titleController,
@@ -124,12 +127,16 @@ class _MapScreenState extends State<MapScreen> {
                 // Title (closer to circle)
                 if (routePoint.title.isNotEmpty)
                   Positioned(
-                    bottom: 1, // Reduce this value to move the title further down the circle
+                    bottom: 1,
+                    // Reduce this value to move the title further down the circle
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 3, vertical: 1),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.8), // Semi-transparent background
-                        borderRadius: BorderRadius.circular(8), // Rounded edges for a softer look
+                        color: Colors.white.withValues(alpha: 0.8),
+                        // Semi-transparent background
+                        borderRadius: BorderRadius.circular(
+                            8), // Rounded edges for a softer look
                       ),
                       child: Text(
                         routePoint.title,
@@ -147,13 +154,15 @@ class _MapScreenState extends State<MapScreen> {
                 Icon(
                   routePoints.indexOf(routePoint) == 0
                       ? Icons.trip_origin
-                      : routePoints.indexOf(routePoint) == routePoints.length - 1
+                      : routePoints.indexOf(routePoint) ==
+                      routePoints.length - 1
                       ? Icons.flag_circle
                       : Icons.circle,
                   size: isDragging ? 65 : 40,
                   color: routePoints.indexOf(routePoint) == 0
                       ? const Color(0xFF4c8d40)
-                      : routePoints.indexOf(routePoint) == routePoints.length - 1
+                      : routePoints.indexOf(routePoint) ==
+                      routePoints.length - 1
                       ? const Color(0xFFde3a71)
                       : Colors.blue,
                 ),
@@ -173,41 +182,61 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FlutterMap(
-        mapController: _mapController,
-        options: MapOptions(
-          initialCenter: LatLng(59.3325, 18.065),
-          initialZoom: 10.0,
-          onPositionChanged: (position, hasGesture) {
-            setState(() {
-              zoomLevel = position.zoom;
-            });
-          },
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-          ),
-          onTap: (tapPosition, point) {
-            _addMarker(point);
-          },
-        ),
-        children: [
-          TileLayer(
-            urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-          ),
-          if (routePoints.isNotEmpty)
-            PolylineLayer(
-              polylines: [
-                Polyline(
-                  points: routePoints.map((routePoint) => routePoint.point).toList(),
-                  color: Colors.blue.withValues(alpha: 0.7),
-                  strokeWidth: 4.0,
-                ),
-              ],
+      body: OverflowBox(
+        alignment: Alignment.topLeft,
+        minWidth: 0,
+        minHeight: 0,
+        maxWidth: MediaQuery
+            .of(context)
+            .size
+            .width + 200,
+        // Extra width for overflow
+        maxHeight: MediaQuery
+            .of(context)
+            .size
+            .height + 100,
+        // Extra height for overflow
+        child: Transform.translate(
+          offset: const Offset(-200, -100),
+          // Offset to allow overflow in all directions
+          child: FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: LatLng(59.3325, 18.065),
+              initialZoom: 10.0,
+              onPositionChanged: (position, hasGesture) {
+                setState(() {
+                  zoomLevel = position.zoom;
+                });
+              },
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+              ),
+              onTap: (tapPosition, point) {
+                _addMarker(point);
+              },
             ),
-          DragMarkers(
-            markers: _buildDragMarkers(),
+            children: [
+              TileLayer(
+                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+              ),
+              if (routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: routePoints.map((routePoint) => routePoint.point)
+                          .toList(),
+                      color: Colors.blue.withAlpha(180),
+                      strokeWidth: 4.0,
+                    ),
+                  ],
+                ),
+              DragMarkers(
+                markers: _buildDragMarkers(),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
