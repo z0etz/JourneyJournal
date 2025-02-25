@@ -1,44 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_dragmarker/flutter_map_dragmarker.dart';
+import 'package:journeyjournal/models/route_point.dart';
+import 'package:journeyjournal/screens/main_screen.dart';
 import 'package:latlong2/latlong.dart';
-import '../utils/map_utils.dart';
-import '../models/route_point.dart';
+import 'package:journeyjournal/utils/map_utils.dart';
+import 'package:journeyjournal/models/route.dart';
+
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final RouteModel? initialRoute;
+  const MapScreen({super.key, this.initialRoute});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
 class _MapScreenState extends State<MapScreen> {
+  late RouteModel currentRoute;
+
   final MapController _mapController = MapController();
-  List<RoutePoint> routePoints = [];
   double zoomLevel = 10.0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialRoute != null) {
+      currentRoute = widget.initialRoute!;
+    } else {
+      if (RouteModel.savedRoutes.isEmpty) {
+        currentRoute = RouteModel.createNewRoute();
+      } else {
+        currentRoute = RouteModel.savedRoutes.last;
+      }
+    }
+  }
 
   // Add marker at tapped location
   void _addMarker(LatLng point) {
     RoutePoint newRoutePoint = RoutePoint(point: point);
 
-    if (routePoints.isEmpty) {
+    if (currentRoute.routePoints.isEmpty) {
       setState(() {
-        routePoints.add(newRoutePoint);
+        currentRoute.routePoints.add(newRoutePoint);
       });
       return;
     }
 
     bool inserted = false;
-    for (int i = 0; i < routePoints.length - 1; i++) {
-      LatLng p1 = routePoints[i].point;
-      LatLng p2 = routePoints[i + 1].point;
+    for (int i = 0; i < currentRoute.routePoints.length - 1; i++) {
+      LatLng p1 = currentRoute.routePoints[i].point;
+      LatLng p2 = currentRoute.routePoints[i + 1].point;
 
       double threshold = getThreshold(zoomLevel);
       double distToSegment = distanceToSegment(point, p1, p2);
 
       if (distToSegment < threshold) {
         setState(() {
-          routePoints.insert(i + 1, newRoutePoint);
+          currentRoute.routePoints.insert(i + 1, newRoutePoint);
         });
         inserted = true;
         break;
@@ -47,14 +66,14 @@ class _MapScreenState extends State<MapScreen> {
 
     if (!inserted) {
       setState(() {
-        routePoints.add(newRoutePoint);
+        currentRoute.routePoints.add(newRoutePoint);
       });
     }
   }
 
   // Create list of DragMarkers
   List<DragMarker> _buildDragMarkers() {
-    return routePoints.map((routePoint) {
+    return currentRoute.routePoints.map((routePoint) {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
         point: routePoint.point,
@@ -63,7 +82,7 @@ class _MapScreenState extends State<MapScreen> {
           return GestureDetector(
             onTap: () {
               setState(() {
-                routePoints.remove(routePoint);
+                currentRoute.routePoints.remove(routePoint);
               });
             },
             onLongPress: () {
@@ -163,17 +182,17 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 // Circle icon
                 Icon(
-                  routePoints.indexOf(routePoint) == 0
+                  currentRoute.routePoints.indexOf(routePoint) == 0
                       ? Icons.trip_origin
-                      : routePoints.indexOf(routePoint) ==
-                      routePoints.length - 1
+                      : currentRoute.routePoints.indexOf(routePoint) ==
+                      currentRoute.routePoints.length - 1
                       ? Icons.flag_circle
                       : Icons.circle,
                   size: isDragging ? 65 : 40,
-                  color: routePoints.indexOf(routePoint) == 0
+                  color: currentRoute.routePoints.indexOf(routePoint) == 0
                       ? const Color(0xFF4c8d40)
-                      : routePoints.indexOf(routePoint) ==
-                      routePoints.length - 1
+                      : currentRoute.routePoints.indexOf(routePoint) ==
+                      currentRoute.routePoints.length - 1
                       ? const Color(0xFFde3a71)
                       : Colors.blue,
                 ),
@@ -213,7 +232,7 @@ class _MapScreenState extends State<MapScreen> {
           child: FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              initialCenter: LatLng(59.3325, 18.065),
+              initialCenter: LatLng(59.322, 17.888),
               initialZoom: 10.0,
               onPositionChanged: (position, hasGesture) {
                 setState(() {
@@ -231,11 +250,11 @@ class _MapScreenState extends State<MapScreen> {
               TileLayer(
                 urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
               ),
-              if (routePoints.isNotEmpty)
+              if (currentRoute.routePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: routePoints.map((routePoint) => routePoint.point)
+                      points: currentRoute.routePoints.map((routePoint) => routePoint.point)
                           .toList(),
                       color: Colors.blue.withAlpha(180),
                       strokeWidth: 4.0,
@@ -249,6 +268,23 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Create a new route and add it to the route list
+          RouteModel newRoute = RouteModel.createNewRoute();
+
+          // Navigate to the newly created route
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainScreen(initialRoute: newRoute),
+            ),
+                (Route<dynamic> route) => false, // Removes all previous routes
+          );
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
+

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:journeyjournal/models/route.dart';
 import 'map_screen.dart';
 import 'route_screen.dart';
 import 'calendar_screen.dart';
 import 'settings_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final RouteModel? initialRoute;
+  const MainScreen({super.key, this.initialRoute});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
