@@ -14,7 +14,13 @@ class RouteModel {
   @HiveField(2)
   HiveList<RoutePoint> routePoints;
 
-  RouteModel({required this.id, required this.name, required this.routePoints});
+  RouteModel({
+    required this.id,
+    required this.name,
+    required List<RoutePoint> routePoints,
+  }) : routePoints = HiveList<RoutePoint>(Hive.box<RoutePoint>('routePoints')) {
+    this.routePoints.addAll(routePoints);
+  }
 
   // Static method to get the box of routes
   static Future<Box<RouteModel>> getRoutesBox() async {

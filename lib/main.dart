@@ -6,10 +6,12 @@ import 'package:journeyjournal/models/route.dart';
 
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   Hive.registerAdapter(RouteModelAdapter());  // Register RouteModel adapter
   Hive.registerAdapter(RoutePointAdapter());  // Register RoutePoint adapter
   await Hive.openBox<RouteModel>('routes');  // Open box for routes
+  await Hive.openBox<RoutePoint>('routePoints');
   runApp(const MyApp());
 }
 
