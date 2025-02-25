@@ -56,8 +56,8 @@ dependencies:
   # Permissions (for image picker to access photos/camera)
   permission_handler: ^11.4.0
 
-#  # Flutter ffmpeg for generationg videos
-#  flutter_ffmpeg: ^0.4.2
+  # Flutter ffmpeg for generationg videos
+  flutter_ffmpeg: ^0.4.2
 
 dev_dependencies:
   flutter_test:
