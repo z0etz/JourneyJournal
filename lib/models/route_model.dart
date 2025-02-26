@@ -3,7 +3,7 @@ import 'package:journeyjournal/models/route_point.dart';
 
 part 'route_model.g.dart'; // This will be generated
 
-@HiveType(typeId: 0)
+@HiveType(typeId: 2)
 class RouteModel {
   @HiveField(0)
   final String id;
