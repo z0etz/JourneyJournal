@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:journeyjournal/models/route.dart';
+import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/screens/map_screen.dart';
 import 'package:journeyjournal/screens/route_screen.dart';
 import 'package:journeyjournal/screens/calendar_screen.dart';

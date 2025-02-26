@@ -6,7 +6,7 @@ import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/main_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
-import 'package:journeyjournal/models/route.dart'; // Import the RouteModel
+import 'package:journeyjournal/models/route_model.dart'; // Import the RouteModel
 
 class MapScreen extends StatefulWidget {
   final RouteModel? initialRoute;

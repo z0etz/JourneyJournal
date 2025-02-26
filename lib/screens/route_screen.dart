@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:journeyjournal/screens/main_screen.dart';
-import 'package:journeyjournal/models/route.dart';
+import 'package:journeyjournal/models/route_model.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 class RouteScreen extends StatelessWidget {

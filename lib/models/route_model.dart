@@ -1,7 +1,7 @@
 import 'package:hive/hive.dart';
 import 'package:journeyjournal/models/route_point.dart';
 
-part 'route.g.dart'; // This will be generated
+part 'route_model.g.dart'; // This will be generated
 
 @HiveType(typeId: 0)
 class RouteModel {
@@ -12,15 +12,13 @@ class RouteModel {
   String name;
 
   @HiveField(2)
-  HiveList<RoutePoint> routePoints;
+  List<RoutePoint> routePoints;
 
   RouteModel({
     required this.id,
     required this.name,
-    required List<RoutePoint> routePoints,
-  }) : routePoints = HiveList<RoutePoint>(Hive.box<RoutePoint>('routePoints')) {
-    this.routePoints.addAll(routePoints);
-  }
+    List<RoutePoint>? routePoints,
+  }) : routePoints = routePoints ?? [];
 
   // Static method to get the box of routes
   static Future<Box<RouteModel>> getRoutesBox() async {

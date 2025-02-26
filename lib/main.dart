@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/login_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:journeyjournal/models/route.dart';
+import 'package:journeyjournal/models/route_model.dart';
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
-  Hive.registerAdapter(RouteModelAdapter());  // Register RouteModel adapter
-  Hive.registerAdapter(RoutePointAdapter());  // Register RoutePoint adapter
-  await Hive.openBox<RouteModel>('routes');  // Open box for routes
-  await Hive.openBox<RoutePoint>('routePoints');
+  Hive.registerAdapter(RouteModelAdapter());
+  Hive.registerAdapter(RoutePointAdapter());
+  await Hive.openBox<RouteModel>('routes');
   runApp(const MyApp());
 }
 
