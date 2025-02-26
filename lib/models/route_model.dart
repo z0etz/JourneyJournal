@@ -22,7 +22,7 @@ class RouteModel {
 
   // Static method to get the box of routes
   static Future<Box<RouteModel>> getRoutesBox() async {
-    return await Hive.openBox<RouteModel>('routes');
+    return await Hive.openBox<RouteModel>('routesBox');
   }
 
   // Method to generate a unique route name
@@ -55,7 +55,7 @@ class RouteModel {
     final box = await RouteModel.getRoutesBox();
     String routeName = getNewRouteName(box.values.toList());
     String routeId = DateTime.now().millisecondsSinceEpoch.toString(); // Unique ID based on timestamp
-    RouteModel newRoute = RouteModel(id: routeId, name: routeName, routePoints: HiveList<RoutePoint>(box));
+    RouteModel newRoute = RouteModel(id: routeId, name: routeName, routePoints: []);
     await box.put(newRoute.id, newRoute); // Save to the box
     return newRoute;
   }

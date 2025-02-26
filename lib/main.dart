@@ -10,7 +10,12 @@ void main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(RouteModelAdapter());
   Hive.registerAdapter(RoutePointAdapter());
-  await Hive.openBox<RouteModel>('routes');
+
+  // Clear the box before opening it
+  // await Hive.deleteBoxFromDisk('routes');
+  // await Hive.deleteBoxFromDisk('routesBox');
+
+  await Hive.openBox<RouteModel>('routesBox');
   runApp(const MyApp());
 }
 

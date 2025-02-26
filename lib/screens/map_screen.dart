@@ -69,8 +69,8 @@ class _MapScreenState extends State<MapScreen> {
 
     bool inserted = false;
     for (int i = 0; i < currentRoute.routePoints.length - 1; i++) {
-      LatLng p1 = currentRoute.routePoints[i].point;
-      LatLng p2 = currentRoute.routePoints[i + 1].point;
+      LatLng p1 = currentRoute.routePoints[i].latLng;
+      LatLng p2 = currentRoute.routePoints[i + 1].latLng;
 
       double threshold = getThreshold(zoomLevel);
       double distToSegment = distanceToSegment(point, p1, p2);
@@ -96,7 +96,7 @@ class _MapScreenState extends State<MapScreen> {
     return currentRoute.routePoints.map((routePoint) {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
-        point: routePoint.point,
+        point: routePoint.latLng,
         size: const Size(160, 80),
         builder: (_, __, isDragging) {
           return GestureDetector(
@@ -222,7 +222,7 @@ class _MapScreenState extends State<MapScreen> {
         },
         onDragEnd: (details, newPoint) {
           setState(() {
-            routePoint.point = newPoint;
+            routePoint.point = [newPoint.latitude, newPoint.longitude];
           });
         },
       );
@@ -289,7 +289,7 @@ class _MapScreenState extends State<MapScreen> {
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
+                      points: currentRoute.routePoints.map((routePoint) => routePoint.latLng).toList(),
                       color: Colors.blue.withAlpha(180),
                       strokeWidth: 4.0,
                     ),
