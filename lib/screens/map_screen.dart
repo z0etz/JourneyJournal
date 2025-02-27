@@ -82,6 +82,7 @@ class _MapScreenState extends State<MapScreen> {
           currentRoute.routePoints.insert(i + 1, newRoutePoint);
         });
         inserted = true;
+        currentRoute.save();
         break;
       }
     }
@@ -89,6 +90,7 @@ class _MapScreenState extends State<MapScreen> {
     if (!inserted) {
       setState(() {
         currentRoute.routePoints.add(newRoutePoint);
+        currentRoute.save();
       });
     }
   }
