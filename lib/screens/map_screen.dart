@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_dragmarker/flutter_map_dragmarker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/main_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
-import 'package:journeyjournal/models/route_model.dart'; // Import the RouteModel
+import 'package:journeyjournal/models/route_model.dart';
+import 'package:journeyjournal/utils/image_helper.dart';
+
 
 class MapScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -111,13 +116,15 @@ class _MapScreenState extends State<MapScreen> {
             },
             onLongPress: () {
               TextEditingController titleController = TextEditingController(text: routePoint.title);
+              TextEditingController descriptionController = TextEditingController(text: routePoint.description);
               DateTime? selectedDate = routePoint.date;
+              List<String> selectedImages = List<String>.from(routePoint.images);
 
               showDialog(
                 context: context,
                 builder: (BuildContext context) {
                   return StatefulBuilder(
-                    builder: (context, setState) {
+                    builder: (context, setDialogState) {
                       return AlertDialog(
                         title: const Text("Marker Options"),
                         content: Column(
@@ -130,8 +137,20 @@ class _MapScreenState extends State<MapScreen> {
                                 labelText: "Title",
                               ),
                               onChanged: (value) {
-                                setState(() {
+                                setDialogState(() {
                                   routePoint.title = value;
+                                });
+                              },
+                            ),
+                            TextField(
+                              controller: descriptionController,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                labelText: "Description",
+                              ),
+                              onChanged: (value) {
+                                setDialogState(() {
+                                  routePoint.description = value;
                                 });
                               },
                             ),
@@ -144,7 +163,7 @@ class _MapScreenState extends State<MapScreen> {
                                   lastDate: DateTime(2100),
                                 );
                                 if (pickedDate != null) {
-                                  setState(() {
+                                  setDialogState(() {
                                     selectedDate = pickedDate;
                                     routePoint.date = pickedDate;
                                   });
@@ -157,11 +176,52 @@ class _MapScreenState extends State<MapScreen> {
                                 style: const TextStyle(color: Colors.blue),
                               ),
                             ),
+                            TextButton(
+                              onPressed: () async {
+                                final ImagePicker picker = ImagePicker();
+                                final List<XFile> pickedImages = await picker.pickMultiImage();
+
+                                if (pickedImages.isNotEmpty) {
+                                  for (var image in pickedImages) {
+                                    String savedPath = await saveImageLocally(image);
+                                    setDialogState(() {
+                                      selectedImages.add(savedPath);
+                                    });
+                                  }
+                                }
+                              },
+                              child: const Text(
+                                'Add Images',
+                                style: TextStyle(color: Colors.blue),
+                              ),
+                            ),
+                            SizedBox(
+                              height: 100,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                children: selectedImages.map((path) {
+                                  return Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Image.file(
+                                      File(path),
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
                           ],
                         ),
                         actions: [
                           TextButton(
                             onPressed: () {
+                              routePoint.title = titleController.text;
+                              routePoint.description = descriptionController.text;
+                              routePoint.date = selectedDate;
+                              routePoint.images = selectedImages;
+                              currentRoute.save();
                               Navigator.of(context).pop();
                             },
                             child: const Text("Save"),
