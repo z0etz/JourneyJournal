@@ -1,18 +1,41 @@
+import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
 
-class RoutePoint {
-  LatLng point;          // Geographical location of the marker
-  String title;          // Title of the marker
-  String description;    // Description of the marker
-  List<String> images;   // List of image URLs (or paths)
-  DateTime? date;        // Date associated with the marker (nullable)
+part 'route_point.g.dart';
 
-  // Constructor to initialize the RoutePoint
+@HiveType(typeId: 3)
+class RoutePoint {
+  // Internal field to store the point as a List of doubles [latitude, longitude]
+  @HiveField(0)
+  List<double> _point = [0.0, 0.0]; // This stores latitude and longitude as doubles
+
+  @HiveField(1)
+  String title;
+
+  @HiveField(2)
+  String description;
+
+  @HiveField(3)
+  List<String> images;
+
+  @HiveField(4)
+  DateTime? date;
+
+  // Use a getter and setter for LatLng point
+  LatLng get point => LatLng(_point[0], _point[1]);
+  set point(LatLng newPoint) => _point = [newPoint.latitude, newPoint.longitude];
+
+  // Constructor - now `point` is optional
   RoutePoint({
-    required this.point,
+    LatLng? point,
     this.title = '',
     this.description = '',
     this.images = const [],
     this.date,
-  });
+  }) {
+    // If `point` is given, set `_point`, otherwise use the default value
+    if (point != null) {
+      _point = [point.latitude, point.longitude];
+    }
+  }
 }
