@@ -127,92 +127,95 @@ class _MapScreenState extends State<MapScreen> {
                     builder: (context, setDialogState) {
                       return AlertDialog(
                         title: const Text("Marker Options"),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextField(
-                              controller: titleController,
-                              maxLength: 12,
-                              decoration: const InputDecoration(
-                                labelText: "Title",
-                              ),
-                              onChanged: (value) {
-                                setDialogState(() {
-                                  routePoint.title = value;
-                                });
-                              },
-                            ),
-                            TextField(
-                              controller: descriptionController,
-                              maxLines: 3,
-                              decoration: const InputDecoration(
-                                labelText: "Description",
-                              ),
-                              onChanged: (value) {
-                                setDialogState(() {
-                                  routePoint.description = value;
-                                });
-                              },
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                DateTime? pickedDate = await showDatePicker(
-                                  context: context,
-                                  initialDate: selectedDate ?? DateTime.now(),
-                                  firstDate: DateTime(2000),
-                                  lastDate: DateTime(2100),
-                                );
-                                if (pickedDate != null) {
+                        content: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextField(
+                                controller: titleController,
+                                maxLength: 12,
+                                decoration: const InputDecoration(
+                                  labelText: "Title",
+                                ),
+                                onChanged: (value) {
                                   setDialogState(() {
-                                    selectedDate = pickedDate;
-                                    routePoint.date = pickedDate;
+                                    routePoint.title = value;
                                   });
-                                }
-                              },
-                              child: Text(
-                                selectedDate != null
-                                    ? 'Date: ${selectedDate!.toLocal().toString().split(' ')[0]}'
-                                    : 'Select Date',
-                                style: const TextStyle(color: Colors.blue),
+                                },
                               ),
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                final ImagePicker picker = ImagePicker();
-                                final List<XFile> pickedImages = await picker.pickMultiImage();
-
-                                if (pickedImages.isNotEmpty) {
-                                  for (var image in pickedImages) {
-                                    String savedPath = await saveImageLocally(image);
+                              TextField(
+                                controller: descriptionController,
+                                maxLines: 3,
+                                decoration: const InputDecoration(
+                                  labelText: "Description",
+                                ),
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    routePoint.description = value;
+                                  });
+                                },
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  DateTime? pickedDate = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedDate ?? DateTime.now(),
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (pickedDate != null) {
                                     setDialogState(() {
-                                      selectedImages.add(savedPath);
+                                      selectedDate = pickedDate;
+                                      routePoint.date = pickedDate;
                                     });
                                   }
-                                }
-                              },
-                              child: const Text(
-                                'Add Images',
-                                style: TextStyle(color: Colors.blue),
+                                },
+                                child: Text(
+                                  selectedDate != null
+                                      ? 'Date: ${selectedDate!.toLocal().toString().split(' ')[0]}'
+                                      : 'Select Date',
+                                  style: const TextStyle(color: Colors.blue),
+                                ),
                               ),
-                            ),
-                            SizedBox(
-                              height: 100,
-                              child: ListView(
-                                scrollDirection: Axis.horizontal,
-                                children: selectedImages.map((path) {
-                                  return Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Image.file(
-                                      File(path),
-                                      width: 80,
-                                      height: 80,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  );
-                                }).toList(),
+                              TextButton(
+                                onPressed: () async {
+                                  final ImagePicker picker = ImagePicker();
+                                  final List<XFile> pickedImages = await picker.pickMultiImage();
+
+                                  if (pickedImages.isNotEmpty) {
+                                    for (var image in pickedImages) {
+                                      String savedPath = await saveImageLocally(image);
+                                      setDialogState(() {
+                                        selectedImages.add(savedPath);
+                                      });
+                                    }
+                                  }
+                                },
+                                child: const Text(
+                                  'Add Images',
+                                  style: TextStyle(color: Colors.blue),
+                                ),
                               ),
-                            ),
-                          ],
+                              // Display selected images in the dialog itself
+                              SizedBox(
+                                height: 100,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children: selectedImages.map((path) {
+                                    return Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: Image.file(
+                                        File(path),
+                                        width: 80,
+                                        height: 80,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         actions: [
                           TextButton(
@@ -235,6 +238,7 @@ class _MapScreenState extends State<MapScreen> {
                 setState(() {}); // Refresh UI after dialog is closed
               });
             },
+
             child: Stack(
               alignment: Alignment.center,
               children: [
