@@ -3,6 +3,7 @@ import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/login_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:journeyjournal/models/route_model.dart';
+import 'package:journeyjournal/utils/lat_lang_adapter.dart';
 
 
 void main() async {
@@ -10,6 +11,7 @@ void main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(RouteModelAdapter());
   Hive.registerAdapter(RoutePointAdapter());
+  Hive.registerAdapter(LatLngAdapter());
 
   // Clear the box before opening it
   // await Hive.deleteBoxFromDisk('routes');

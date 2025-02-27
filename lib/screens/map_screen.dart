@@ -57,7 +57,9 @@ class _MapScreenState extends State<MapScreen> {
 
   // Add marker at tapped location
   void _addMarker(LatLng point) {
-    RoutePoint newRoutePoint = RoutePoint(point: point);
+    RoutePoint newRoutePoint = RoutePoint();
+    newRoutePoint.point = point;
+
 
     if (currentRoute.routePoints.isEmpty) {
       setState(() {
@@ -69,8 +71,8 @@ class _MapScreenState extends State<MapScreen> {
 
     bool inserted = false;
     for (int i = 0; i < currentRoute.routePoints.length - 1; i++) {
-      LatLng p1 = currentRoute.routePoints[i].latLng;
-      LatLng p2 = currentRoute.routePoints[i + 1].latLng;
+      LatLng p1 = currentRoute.routePoints[i].point;
+      LatLng p2 = currentRoute.routePoints[i + 1].point;
 
       double threshold = getThreshold(zoomLevel);
       double distToSegment = distanceToSegment(point, p1, p2);
@@ -96,7 +98,7 @@ class _MapScreenState extends State<MapScreen> {
     return currentRoute.routePoints.map((routePoint) {
       return DragMarker(
         key: GlobalKey<DragMarkerWidgetState>(),
-        point: routePoint.latLng,
+        point: routePoint.point,
         size: const Size(160, 80),
         builder: (_, __, isDragging) {
           return GestureDetector(
@@ -221,10 +223,11 @@ class _MapScreenState extends State<MapScreen> {
           );
         },
         onDragEnd: (details, newPoint) {
-          setState(() {
-            routePoint.point = [newPoint.latitude, newPoint.longitude];
-          });
-        },
+        setState(() {
+          routePoint.point = newPoint;
+        });
+      },
+
       );
     }).toList();
   }
@@ -289,7 +292,7 @@ class _MapScreenState extends State<MapScreen> {
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: currentRoute.routePoints.map((routePoint) => routePoint.latLng).toList(),
+                      points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
                       color: Colors.blue.withAlpha(180),
                       strokeWidth: 4.0,
                     ),

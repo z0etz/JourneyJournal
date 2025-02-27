@@ -3,11 +3,11 @@ import 'package:latlong2/latlong.dart';
 
 part 'route_point.g.dart';
 
-@HiveType(typeId: 1)
+@HiveType(typeId: 3)
 class RoutePoint {
-  // Store the coordinates as a List of doubles [latitude, longitude]
+  // Internal field to store the point as a List of doubles [latitude, longitude]
   @HiveField(0)
-  List<double> _point; // Internal storage for the coordinates
+  List<double> _point = [0.0, 0.0]; // This stores latitude and longitude as doubles
 
   @HiveField(1)
   String title;
@@ -21,19 +21,21 @@ class RoutePoint {
   @HiveField(4)
   DateTime? date;
 
+  // Use a getter and setter for LatLng point
+  LatLng get point => LatLng(_point[0], _point[1]);
+  set point(LatLng newPoint) => _point = [newPoint.latitude, newPoint.longitude];
+
+  // Constructor - now `point` is optional
   RoutePoint({
-    required LatLng point,  // Accept LatLng in constructor
+    LatLng? point,
     this.title = '',
     this.description = '',
     this.images = const [],
     this.date,
-  }) : _point = [point.latitude, point.longitude];  // Convert to List<double> for storage
-
-  // Getter for LatLng to be used when needed
-  LatLng get latLng => LatLng(_point[0], _point[1]);
-
-  // Optional: Setter for LatLng (if you need to update the point after instantiation)
-  set latLng(LatLng newPoint) {
-    _point = [newPoint.latitude, newPoint.longitude];
+  }) {
+    // If `point` is given, set `_point`, otherwise use the default value
+    if (point != null) {
+      _point = [point.latitude, point.longitude];
+    }
   }
 }

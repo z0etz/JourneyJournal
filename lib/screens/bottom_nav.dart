@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'screens/map_screen.dart';
-import 'screens/route_screen.dart';
-import 'screens/calendar_screen.dart';
-import 'screens/settings_screen.dart';
+import 'map_screen.dart';
+import 'route_screen.dart';
+import 'calendar_screen.dart';
+import 'settings_screen.dart';
 
 class AppBottomNavigationBar extends StatelessWidget {
   final int currentIndex;
