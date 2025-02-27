@@ -186,7 +186,7 @@ class _MapScreenState extends State<MapScreen> {
                                     for (var image in pickedImages) {
                                       String savedPath = await saveImageLocally(image);
                                       setDialogState(() {
-                                        selectedImages.add(savedPath);
+                                        routePoint.images.add(savedPath); // Add to the correct list
                                       });
                                     }
                                   }
@@ -196,20 +196,53 @@ class _MapScreenState extends State<MapScreen> {
                                   style: TextStyle(color: Colors.blue),
                                 ),
                               ),
-                              // Display selected images in the dialog itself
+                              // Display selected images with delete option
                               SizedBox(
                                 height: 100,
                                 child: ListView(
                                   scrollDirection: Axis.horizontal,
-                                  children: selectedImages.map((path) {
-                                    return Padding(
-                                      padding: const EdgeInsets.all(4.0),
-                                      child: Image.file(
-                                        File(path),
-                                        width: 80,
-                                        height: 80,
-                                        fit: BoxFit.cover,
-                                      ),
+                                  children: routePoint.images.map((path) {
+                                    return Stack(
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.all(4.0),
+                                          child: Image.file(
+                                            File(path),
+                                            width: 80,
+                                            height: 80,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                        Positioned(
+                                          right: 0,
+                                          top: 0,
+                                          child: GestureDetector(
+                                            onTap: () async {
+                                              // Delete the file
+                                              final file = File(path);
+                                              if (await file.exists()) {
+                                                await file.delete();
+                                              }
+
+                                              // Remove from the list
+                                              setDialogState(() {
+                                                routePoint.images.remove(path); // Correctly update list
+                                              });
+                                            },
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.red,
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: const Icon(
+                                                Icons.close,
+                                                color: Colors.white,
+                                                size: 20,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     );
                                   }).toList(),
                                 ),
@@ -223,7 +256,8 @@ class _MapScreenState extends State<MapScreen> {
                               routePoint.title = titleController.text;
                               routePoint.description = descriptionController.text;
                               routePoint.date = selectedDate;
-                              routePoint.images = selectedImages;
+                              // Ensure the images are saved correctly
+                              routePoint.images = List.from(routePoint.images); // Make sure the list is updated
                               currentRoute.save();
                               Navigator.of(context).pop();
                             },
@@ -237,6 +271,7 @@ class _MapScreenState extends State<MapScreen> {
               ).then((_) {
                 setState(() {}); // Refresh UI after dialog is closed
               });
+
             },
 
             child: Stack(
