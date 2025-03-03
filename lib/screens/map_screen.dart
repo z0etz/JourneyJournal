@@ -56,6 +56,24 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
+  // Method to delete the route point
+  void _deleteRoutePoint(RoutePoint routePoint) {
+    setState(() {
+      currentRoute.routePoints.remove(routePoint); // Remove the route point from the list
+      currentRoute.save(); // Save the updated route
+    });
+  }
+
+// Method to save the route point's changes
+  void _saveRoutePoint(RoutePoint routePoint, TextEditingController titleController, TextEditingController descriptionController, DateTime? selectedDate) {
+    routePoint.title = titleController.text; // Update the title
+    routePoint.description = descriptionController.text; // Update the description
+    routePoint.date = selectedDate; // Update the date
+    // Ensure images are saved correctly
+    routePoint.images = List.from(routePoint.images); // Make sure the list is updated
+    currentRoute.save(); // Save the updated route
+  }
+
   // Add marker at tapped location
   void _addMarker(LatLng point) {
     RoutePoint newRoutePoint = RoutePoint();
@@ -119,6 +137,8 @@ class _MapScreenState extends State<MapScreen> {
                   titleController: titleController,
                   descriptionController: descriptionController,
                   selectedDate: selectedDate,
+                  onDelete: () => _deleteRoutePoint(routePoint), // Pass the delete callback
+                  onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate), // Pass the save callback
                 ).then((_) {
                   setState(() {}); // Refresh UI after dialog is closed
                 });
@@ -141,6 +161,8 @@ class _MapScreenState extends State<MapScreen> {
                 titleController: titleController,
                 descriptionController: descriptionController,
                 selectedDate: selectedDate,
+                onDelete: () => _deleteRoutePoint(routePoint), // Pass the delete callback
+                onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate), // Pass the save callback
               ).then((_) {
                 setState(() {}); // Refresh UI after dialog is closed
               });

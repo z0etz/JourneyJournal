@@ -39,6 +39,8 @@ Future<void> showRoutePointDialog(
       required TextEditingController titleController,
       required TextEditingController descriptionController,
       DateTime? selectedDate,
+      required Function() onDelete, // Callback to delete route point
+      required Function() onSave,   // Callback to save route point
     }) {
   return showDialog(
     context: context,
@@ -106,7 +108,7 @@ Future<void> showRoutePointDialog(
                         for (var image in pickedImages) {
                           String savedPath = await saveImageLocally(image);
                           setDialogState(() {
-                            routePoint.images.add(savedPath);  // Directly update `routePoint.images`
+                            routePoint.images.add(savedPath); // Directly update `routePoint.images`
                           });
                         }
                       }
@@ -168,16 +170,29 @@ Future<void> showRoutePointDialog(
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: () {
-                  routePoint.title = titleController.text;
-                  routePoint.description = descriptionController.text;
-                  routePoint.date = selectedDate;
-                  // Ensure the images are saved correctly
-                  routePoint.images = List.from(routePoint.images); // Make sure the list is updated
-                  Navigator.of(context).pop();
-                },
-                child: const Text("Save"),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween, // Ensures proper alignment
+                children: [
+                  // Delete button (left-aligned)
+                  TextButton(
+                    onPressed: () {
+                      onDelete(); // Call the delete callback
+                      Navigator.of(context).pop(); // Close the dialog
+                    },
+                    child: const Text(
+                      "Delete",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                  // Save button (right-aligned)
+                  TextButton(
+                    onPressed: () {
+                      onSave(); // Call the save callback
+                      Navigator.of(context).pop(); // Close the dialog
+                    },
+                    child: const Text("Save"),
+                  ),
+                ],
               ),
             ],
           );
