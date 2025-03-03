@@ -6,7 +6,8 @@ import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/main_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
-import 'package:journeyjournal/models/route_model.dart'; // Import the RouteModel
+import 'package:journeyjournal/models/route_model.dart';
+
 
 class MapScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -55,10 +56,29 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
+  // Method to delete the route point
+  void _deleteRoutePoint(RoutePoint routePoint) {
+    setState(() {
+      currentRoute.routePoints.remove(routePoint); // Remove the route point from the list
+      currentRoute.save(); // Save the updated route
+    });
+  }
+
+// Method to save the route point's changes
+  void _saveRoutePoint(RoutePoint routePoint, TextEditingController titleController, TextEditingController descriptionController, DateTime? selectedDate) {
+    routePoint.title = titleController.text; // Update the title
+    routePoint.description = descriptionController.text; // Update the description
+    routePoint.date = selectedDate; // Update the date
+    // Ensure images are saved correctly
+    routePoint.images = List.from(routePoint.images); // Make sure the list is updated
+    currentRoute.save(); // Save the updated route
+  }
+
   // Add marker at tapped location
   void _addMarker(LatLng point) {
     RoutePoint newRoutePoint = RoutePoint();
     newRoutePoint.point = point;
+    newRoutePoint.images = [];  // Initialize images list
 
 
     if (currentRoute.routePoints.isEmpty) {
@@ -105,72 +125,44 @@ class _MapScreenState extends State<MapScreen> {
         builder: (_, __, isDragging) {
           return GestureDetector(
             onTap: () {
-              setState(() {
-                currentRoute.routePoints.remove(routePoint);
-              });
+              if (routePoint.hasInfo) {
+                // If the route point has info, show the dialog
+                TextEditingController titleController = TextEditingController(text: routePoint.title);
+                TextEditingController descriptionController = TextEditingController(text: routePoint.description);
+                DateTime? selectedDate = routePoint.date;
+
+                showRoutePointDialog(
+                  context,
+                  routePoint,
+                  titleController: titleController,
+                  descriptionController: descriptionController,
+                  selectedDate: selectedDate,
+                  onDelete: () => _deleteRoutePoint(routePoint), // Pass the delete callback
+                  onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate), // Pass the save callback
+                ).then((_) {
+                  setState(() {}); // Refresh UI after dialog is closed
+                });
+              } else {
+                // If no info, delete the route point on tap
+                setState(() {
+                  currentRoute.routePoints.remove(routePoint);
+                });
+                currentRoute.save();
+              }
             },
             onLongPress: () {
               TextEditingController titleController = TextEditingController(text: routePoint.title);
+              TextEditingController descriptionController = TextEditingController(text: routePoint.description);
               DateTime? selectedDate = routePoint.date;
 
-              showDialog(
-                context: context,
-                builder: (BuildContext context) {
-                  return StatefulBuilder(
-                    builder: (context, setState) {
-                      return AlertDialog(
-                        title: const Text("Marker Options"),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextField(
-                              controller: titleController,
-                              maxLength: 12,
-                              decoration: const InputDecoration(
-                                labelText: "Title",
-                              ),
-                              onChanged: (value) {
-                                setState(() {
-                                  routePoint.title = value;
-                                });
-                              },
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                DateTime? pickedDate = await showDatePicker(
-                                  context: context,
-                                  initialDate: selectedDate ?? DateTime.now(),
-                                  firstDate: DateTime(2000),
-                                  lastDate: DateTime(2100),
-                                );
-                                if (pickedDate != null) {
-                                  setState(() {
-                                    selectedDate = pickedDate;
-                                    routePoint.date = pickedDate;
-                                  });
-                                }
-                              },
-                              child: Text(
-                                selectedDate != null
-                                    ? 'Date: ${selectedDate!.toLocal().toString().split(' ')[0]}'
-                                    : 'Select Date',
-                                style: const TextStyle(color: Colors.blue),
-                              ),
-                            ),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: const Text("Save"),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
+              showRoutePointDialog(
+                context,
+                routePoint,
+                titleController: titleController,
+                descriptionController: descriptionController,
+                selectedDate: selectedDate,
+                onDelete: () => _deleteRoutePoint(routePoint), // Pass the delete callback
+                onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate), // Pass the save callback
               ).then((_) {
                 setState(() {}); // Refresh UI after dialog is closed
               });
@@ -206,12 +198,14 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 // Circle icon
                 Icon(
-                  currentRoute.routePoints.indexOf(routePoint) == 0
-                      ? Icons.trip_origin
-                      : currentRoute.routePoints.indexOf(routePoint) ==
-                      currentRoute.routePoints.length - 1
-                      ? Icons.flag_circle
-                      : Icons.circle,
+                  // If route point has info, use the star icon
+                  routePoint.hasInfo
+                      ? Icons.stars // Star icon for route points with info
+                      : currentRoute.routePoints.indexOf(routePoint) == 0
+                      ? Icons.trip_origin // First point, start of route
+                      : currentRoute.routePoints.indexOf(routePoint) == currentRoute.routePoints.length - 1
+                      ? Icons.flag_circle // Last point, end of route
+                      : Icons.circle, // Normal points
                   size: isDragging ? 65 : 40,
                   color: currentRoute.routePoints.indexOf(routePoint) == 0
                       ? const Color(0xFF4c8d40)

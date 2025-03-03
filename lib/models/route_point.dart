@@ -25,6 +25,9 @@ class RoutePoint {
   LatLng get point => LatLng(_point[0], _point[1]);
   set point(LatLng newPoint) => _point = [newPoint.latitude, newPoint.longitude];
 
+  // Computed property (not stored in Hive)
+  bool get hasInfo => title.isNotEmpty || description.isNotEmpty || date != null || images.isNotEmpty;
+
   // Constructor - now `point` is optional
   RoutePoint({
     LatLng? point,
