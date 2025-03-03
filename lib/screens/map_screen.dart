@@ -1,15 +1,12 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_dragmarker/flutter_map_dragmarker.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/screens/main_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
 import 'package:journeyjournal/models/route_model.dart';
-import 'package:journeyjournal/utils/image_helper.dart';
 
 
 class MapScreen extends StatefulWidget {
@@ -110,160 +107,40 @@ class _MapScreenState extends State<MapScreen> {
         builder: (_, __, isDragging) {
           return GestureDetector(
             onTap: () {
-              setState(() {
-                currentRoute.routePoints.remove(routePoint);
-              });
+              if (routePoint.hasInfo) {
+                // If the route point has info, show the dialog
+                TextEditingController titleController = TextEditingController(text: routePoint.title);
+                TextEditingController descriptionController = TextEditingController(text: routePoint.description);
+                DateTime? selectedDate = routePoint.date;
+
+                showRoutePointDialog(
+                  context,
+                  routePoint,
+                  titleController: titleController,
+                  descriptionController: descriptionController,
+                  selectedDate: selectedDate,
+                ).then((_) {
+                  setState(() {}); // Refresh UI after dialog is closed
+                });
+              } else {
+                // If no info, delete the route point on tap
+                setState(() {
+                  currentRoute.routePoints.remove(routePoint);
+                });
+                currentRoute.save();
+              }
             },
             onLongPress: () {
               TextEditingController titleController = TextEditingController(text: routePoint.title);
               TextEditingController descriptionController = TextEditingController(text: routePoint.description);
               DateTime? selectedDate = routePoint.date;
-              showDialog(
-                context: context,
-                builder: (BuildContext context) {
-                  return StatefulBuilder(
-                    builder: (context, setDialogState) {
-                      return AlertDialog(
-                        title: const Text("Marker Options"),
-                        content: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              TextField(
-                                controller: titleController,
-                                maxLength: 12,
-                                decoration: const InputDecoration(
-                                  labelText: "Title",
-                                ),
-                                onChanged: (value) {
-                                  setDialogState(() {
-                                    routePoint.title = value;
-                                  });
-                                },
-                              ),
-                              TextField(
-                                controller: descriptionController,
-                                maxLines: 3,
-                                decoration: const InputDecoration(
-                                  labelText: "Description",
-                                ),
-                                onChanged: (value) {
-                                  setDialogState(() {
-                                    routePoint.description = value;
-                                  });
-                                },
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  DateTime? pickedDate = await showDatePicker(
-                                    context: context,
-                                    initialDate: selectedDate ?? DateTime.now(),
-                                    firstDate: DateTime(2000),
-                                    lastDate: DateTime(2100),
-                                  );
-                                  if (pickedDate != null) {
-                                    setDialogState(() {
-                                      selectedDate = pickedDate;
-                                      routePoint.date = pickedDate;
-                                    });
-                                  }
-                                },
-                                child: Text(
-                                  selectedDate != null
-                                      ? 'Date: ${selectedDate!.toLocal().toString().split(' ')[0]}'
-                                      : 'Select Date',
-                                  style: const TextStyle(color: Colors.blue),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  final ImagePicker picker = ImagePicker();
-                                  final List<XFile> pickedImages = await picker.pickMultiImage();
 
-                                  if (pickedImages.isNotEmpty) {
-                                    for (var image in pickedImages) {
-                                      String savedPath = await saveImageLocally(image);
-                                      setDialogState(() {
-                                        routePoint.images.add(savedPath);  // Directly update `routePoint.images`
-                                        print("Current images: ${routePoint.images}");  // Debugging
-                                      });
-                                    }
-                                  }
-                                },
-                                child: const Text(
-                                  'Add Images',
-                                  style: TextStyle(color: Colors.blue),
-                                ),
-                              ),
-                              // Display selected images with delete option
-                              SizedBox(
-                                height: 100,
-                                child: ListView(
-                                  scrollDirection: Axis.horizontal,
-                                  children: routePoint.images.map((path) {
-                                    return Stack(
-                                      children: [
-                                        Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: Image.file(
-                                            File(path),
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                        Positioned(
-                                          right: 0,
-                                          top: 0,
-                                          child: GestureDetector(
-                                            onTap: () async {
-                                              final file = File(path);
-                                              if (await file.exists()) {
-                                                await file.delete();
-                                              }
-                                              setDialogState(() {
-                                                routePoint.images.remove(path); // Correctly update list
-                                              });
-                                            },
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                color: Colors.red,
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: const Icon(
-                                                Icons.close,
-                                                color: Colors.white,
-                                                size: 20,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              routePoint.title = titleController.text;
-                              routePoint.description = descriptionController.text;
-                              routePoint.date = selectedDate;
-                              // Ensure the images are saved correctly
-                              routePoint.images = List.from(routePoint.images); // Make sure the list is updated
-                              currentRoute.save();
-                              Navigator.of(context).pop();
-                            },
-                            child: const Text("Save"),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
+              showRoutePointDialog(
+                context,
+                routePoint,
+                titleController: titleController,
+                descriptionController: descriptionController,
+                selectedDate: selectedDate,
               ).then((_) {
                 setState(() {}); // Refresh UI after dialog is closed
               });
