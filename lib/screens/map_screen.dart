@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -64,6 +63,7 @@ class _MapScreenState extends State<MapScreen> {
   void _addMarker(LatLng point) {
     RoutePoint newRoutePoint = RoutePoint();
     newRoutePoint.point = point;
+    newRoutePoint.images = [];  // Initialize images list
 
 
     if (currentRoute.routePoints.isEmpty) {
@@ -118,8 +118,6 @@ class _MapScreenState extends State<MapScreen> {
               TextEditingController titleController = TextEditingController(text: routePoint.title);
               TextEditingController descriptionController = TextEditingController(text: routePoint.description);
               DateTime? selectedDate = routePoint.date;
-              List<String> selectedImages = List<String>.from(routePoint.images);
-
               showDialog(
                 context: context,
                 builder: (BuildContext context) {
@@ -186,7 +184,8 @@ class _MapScreenState extends State<MapScreen> {
                                     for (var image in pickedImages) {
                                       String savedPath = await saveImageLocally(image);
                                       setDialogState(() {
-                                        routePoint.images.add(savedPath); // Add to the correct list
+                                        routePoint.images.add(savedPath);  // Directly update `routePoint.images`
+                                        print("Current images: ${routePoint.images}");  // Debugging
                                       });
                                     }
                                   }
@@ -218,13 +217,10 @@ class _MapScreenState extends State<MapScreen> {
                                           top: 0,
                                           child: GestureDetector(
                                             onTap: () async {
-                                              // Delete the file
                                               final file = File(path);
                                               if (await file.exists()) {
                                                 await file.delete();
                                               }
-
-                                              // Remove from the list
                                               setDialogState(() {
                                                 routePoint.images.remove(path); // Correctly update list
                                               });
@@ -271,9 +267,7 @@ class _MapScreenState extends State<MapScreen> {
               ).then((_) {
                 setState(() {}); // Refresh UI after dialog is closed
               });
-
             },
-
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -305,12 +299,14 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 // Circle icon
                 Icon(
-                  currentRoute.routePoints.indexOf(routePoint) == 0
-                      ? Icons.trip_origin
-                      : currentRoute.routePoints.indexOf(routePoint) ==
-                      currentRoute.routePoints.length - 1
-                      ? Icons.flag_circle
-                      : Icons.circle,
+                  // If route point has info, use the star icon
+                  routePoint.hasInfo
+                      ? Icons.stars // Star icon for route points with info
+                      : currentRoute.routePoints.indexOf(routePoint) == 0
+                      ? Icons.trip_origin // First point, start of route
+                      : currentRoute.routePoints.indexOf(routePoint) == currentRoute.routePoints.length - 1
+                      ? Icons.flag_circle // Last point, end of route
+                      : Icons.circle, // Normal points
                   size: isDragging ? 65 : 40,
                   color: currentRoute.routePoints.indexOf(routePoint) == 0
                       ? const Color(0xFF4c8d40)
