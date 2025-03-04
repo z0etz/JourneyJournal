@@ -18,6 +18,7 @@ class _AnimationScreenState extends State<AnimationScreen> {
   late List<RoutePoint> _routePoints;
   bool _isAnimating = false;
   int _currentMarkerIndex = 0;
+
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
 
