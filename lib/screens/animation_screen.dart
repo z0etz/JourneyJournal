@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
+import 'package:geolocator/geolocator.dart'; // Import Geolocator package
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -14,7 +15,7 @@ class AnimationScreen extends StatefulWidget {
   State<AnimationScreen> createState() => _AnimationScreenState();
 }
 
-class _AnimationScreenState extends State<AnimationScreen> {
+class _AnimationScreenState extends State<AnimationScreen> with TickerProviderStateMixin {
   late RouteModel currentRoute;
   late List<RoutePoint> _routePoints;
   bool _isAnimating = false;
@@ -23,10 +24,25 @@ class _AnimationScreenState extends State<AnimationScreen> {
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
 
+  // Add ValueNotifier to track the animated position
+  ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(LatLng(0.0, 0.0));
+
+  // Animation controller for smooth movement
+  late AnimationController _animationController;
+  late Animation<double> _progressAnimation;
+
+  double _totalDistance = 0.0;  // Total distance of the route
+
   @override
   void initState() {
     super.initState();
     _loadRoute();
+
+    // Initialize the animation controller with the vsync provided by this widget
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10), // Duration for the entire movement
+    );
   }
 
   // Load the route or create a new one
@@ -47,10 +63,27 @@ class _AnimationScreenState extends State<AnimationScreen> {
     if (currentRoute.routePoints.isNotEmpty) {
       Future.delayed(const Duration(milliseconds: 300), _fitMapToRoute);
     }
+
+    // Calculate the total distance of the route
+    _calculateTotalDistance();
   }
 
   void _fitMapToRoute() {
     fitMapToRoute(_mapController, currentRoute.routePoints.map((rp) => rp.point).toList());
+  }
+
+  // Calculate total distance of the route using Geolocator
+  void _calculateTotalDistance() {
+    double totalDistance = 0.0;
+    for (int i = 0; i < _routePoints.length - 1; i++) {
+      totalDistance += Geolocator.distanceBetween(
+        _routePoints[i].point.latitude,
+        _routePoints[i].point.longitude,
+        _routePoints[i + 1].point.latitude,
+        _routePoints[i + 1].point.longitude,
+      );
+    }
+    _totalDistance = totalDistance;
   }
 
   // Toggle animation
@@ -63,16 +96,73 @@ class _AnimationScreenState extends State<AnimationScreen> {
     });
   }
 
-  // Simulate marker movement along the route
+  // Animate the marker smoothly along the polyline
   void _animateMarker() {
-    if (_currentMarkerIndex < _routePoints.length - 1 && _isAnimating) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        setState(() {
-          _currentMarkerIndex++;
-        });
-        _animateMarker();
+    if (_isAnimating) {
+      // Create a Tween for progress (0.0 to 1.0)
+      _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Curves.linear, // Linear curve for smooth constant speed
+        ),
+      );
+
+      // Add listener to update the position of the circle
+      _progressAnimation.addListener(() {
+        _moveCircleAlongPath(_progressAnimation.value);
       });
+
+      // Start the animation from the beginning
+      _animationController.reset();
+      _animationController.forward();
     }
+  }
+
+  // Move the circle along the polyline based on progress
+  void _moveCircleAlongPath(double progress) {
+    List<LatLng> path = _routePoints.map((point) => point.point).toList();
+
+    // Calculate the total distance covered so far
+    double distanceCovered = progress * _totalDistance;
+
+    // Now we need to find where this distance lies on the path
+    double distanceSoFar = 0.0;
+    int startIndex = 0;
+    int endIndex = 1;
+
+    for (int i = 0; i < path.length - 1; i++) {
+      double segmentDistance = Geolocator.distanceBetween(
+          path[i].latitude, path[i].longitude,
+          path[i + 1].latitude, path[i + 1].longitude
+      );
+      distanceSoFar += segmentDistance;
+
+      if (distanceSoFar >= distanceCovered) {
+        startIndex = i;
+        endIndex = i + 1;
+        break;
+      }
+    }
+
+    LatLng startPoint = path[startIndex];
+    LatLng endPoint = path[endIndex];
+
+    // Interpolate the position
+    double ratio = (distanceCovered - (distanceSoFar - Geolocator.distanceBetween(
+        startPoint.latitude, startPoint.longitude,
+        path[startIndex + 1].latitude, path[startIndex + 1].longitude
+    ))) /
+        (Geolocator.distanceBetween(
+          startPoint.latitude, startPoint.longitude,
+          endPoint.latitude, endPoint.longitude,
+        ));
+    double lat = startPoint.latitude + (endPoint.latitude - startPoint.latitude) * ratio;
+    double lng = startPoint.longitude + (endPoint.longitude - startPoint.longitude) * ratio;
+
+    LatLng interpolatedPosition = LatLng(lat, lng);
+
+    // Update the circle position with the new interpolated position
+    _circlePositionNotifier.value = interpolatedPosition;
   }
 
   @override
@@ -94,8 +184,6 @@ class _AnimationScreenState extends State<AnimationScreen> {
           child: FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-              // No need to pass 'center' and 'zoom' directly here
-              // These will be managed via _mapController
               onPositionChanged: (position, hasGesture) {
                 setState(() {
                   zoomLevel = position.zoom;
@@ -133,6 +221,27 @@ class _AnimationScreenState extends State<AnimationScreen> {
                     ),
                   );
                 }).toList(),
+              ),
+              // Animated Circle Marker
+              ValueListenableBuilder<LatLng>(
+                valueListenable: _circlePositionNotifier,
+                builder: (context, position, child) {
+                  return MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: position, // Circle's position
+                        width: 40.0,
+                        height: 40.0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
