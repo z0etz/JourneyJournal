@@ -4,7 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
-import 'package:geolocator/geolocator.dart'; // Import Geolocator package
+import 'package:geolocator/geolocator.dart';
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -24,6 +24,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
 
+  // Duration variable to control animation speed
+  Duration _animationDuration = const Duration(seconds: 10);
+
   // Add ValueNotifier to track the animated position
   ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(LatLng(0.0, 0.0));
 
@@ -41,7 +44,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     // Initialize the animation controller with the vsync provided by this widget
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 10), // Duration for the entire movement
+      duration: _animationDuration, // Duration for the entire movement
     );
   }
 
@@ -88,12 +91,19 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   // Toggle animation
   void _toggleAnimation() {
-    setState(() {
-      _isAnimating = !_isAnimating;
-      if (_isAnimating) {
-        _animateMarker();
-      }
-    });
+    if (_isAnimating) {
+      _animationController.stop(); // Stop the animation
+      _animationController.reset(); // Reset progress to start
+      _circlePositionNotifier.value = _routePoints.first.point; // Move marker to start
+      setState(() {
+        _isAnimating = false; // Ensure the state is properly updated
+      });
+    } else {
+      setState(() {
+        _isAnimating = true;
+      });
+      _animateMarker(); // Start the animation fresh
+    }
   }
 
   // Animate the marker smoothly along the polyline
