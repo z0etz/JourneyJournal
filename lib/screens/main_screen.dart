@@ -4,6 +4,7 @@ import 'package:journeyjournal/screens/map_screen.dart';
 import 'package:journeyjournal/screens/route_screen.dart';
 import 'package:journeyjournal/screens/calendar_screen.dart';
 import 'package:journeyjournal/screens/settings_screen.dart';
+import 'package:journeyjournal/screens/animation_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -38,6 +39,7 @@ class _MainScreenState extends State<MainScreen> {
         index: _selectedIndex,
         children: [
           MapScreen(initialRoute: widget.initialRoute), // Pass initialRoute here
+          AnimationScreen(initialRoute: widget.initialRoute),
           const RouteScreen(),
           const CalendarScreen(),
           const SettingsScreen(),
@@ -51,6 +53,10 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.map),
             label: 'Map',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.play_arrow),
+            label: 'Animate',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.directions),

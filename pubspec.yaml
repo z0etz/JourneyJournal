@@ -37,6 +37,8 @@ dependencies:
 
   flutter_map_dragmarker: ^8.0.0
 
+  geolocator: ^9.0.1
+
   # For working with geographical points
   latlong2: ^0.9.1
 

@@ -22,8 +22,7 @@ class RouteScreen extends StatelessWidget {
             return const Center(child: Text('Error loading routes'));
           }
 
-          final box = snapshot.data!;
-          final savedRoutes = box.values.toList(); // Get routes from the box
+          final box = snapshot.data!; // Access the box
 
           return ValueListenableBuilder(
             valueListenable: box.listenable(),
@@ -36,8 +35,14 @@ class RouteScreen extends StatelessWidget {
                   return ListTile(
                     title: Text(route.name),
                     subtitle: Text('Points: ${route.routePoints.length}'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close), // Delete icon
+                      onPressed: () async {
+                        // Delete the route from Hive
+                        await box.delete(route.id);
+                      },
+                    ),
                     onTap: () {
-                      print(route.name);
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(

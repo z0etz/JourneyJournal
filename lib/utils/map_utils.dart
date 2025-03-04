@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
 import 'package:journeyjournal/models/route_point.dart';
@@ -31,6 +32,35 @@ double distanceToSegment(LatLng point, LatLng lineStart, LatLng lineEnd) {
 
 double getThreshold(double zoomLevel) {
   return 0.0002 * pow(2, (15 - zoomLevel));
+}
+
+void fitMapToRoute(MapController mapController, List<LatLng> routePoints) {
+  if (routePoints.isEmpty) return; // Skip if no points
+
+  LatLngBounds bounds = LatLngBounds.fromPoints(routePoints);
+
+  // Compute center of bounds
+  LatLng center = LatLng(
+    (bounds.north + bounds.south) / 2,
+    (bounds.east + bounds.west) / 2,
+  );
+
+  // Apply an offset to shift the center leftward (westward)
+  double longitudeOffset = (bounds.east - bounds.west) * 0.375; // Adjust as needed
+  LatLng adjustedCenter = LatLng(center.latitude, center.longitude - longitudeOffset);
+
+  // Define padding (prevents points from being too close to screen edges)
+  const double padding = 150.0; // Pixels
+
+  mapController.fitCamera(
+    CameraFit.bounds(
+      bounds: bounds,
+      padding: EdgeInsets.all(padding),
+    ),
+  );
+
+  // Move to the adjusted center after fitting bounds
+  mapController.move(adjustedCenter, mapController.camera.zoom);
 }
 
 Future<void> showRoutePointDialog(
