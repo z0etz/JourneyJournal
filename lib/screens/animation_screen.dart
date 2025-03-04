@@ -20,6 +20,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   late List<RoutePoint> _routePoints;
   bool _isAnimating = false;
   int _currentMarkerIndex = 0;
+  bool _isControlsExpanded = false;
+
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -28,13 +30,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   Duration _animationDuration = const Duration(seconds: 10);
 
   // Add ValueNotifier to track the animated position
-  ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(LatLng(0.0, 0.0));
+  ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(
+      LatLng(0.0, 0.0));
 
   // Animation controller for smooth movement
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
 
-  double _totalDistance = 0.0;  // Total distance of the route
+  double _totalDistance = 0.0; // Total distance of the route
 
   @override
   void initState() {
@@ -72,7 +75,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _fitMapToRoute() {
-    fitMapToRoute(_mapController, currentRoute.routePoints.map((rp) => rp.point).toList());
+    fitMapToRoute(_mapController,
+        currentRoute.routePoints.map((rp) => rp.point).toList());
   }
 
   // Calculate total distance of the route using Geolocator
@@ -94,7 +98,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     if (_isAnimating) {
       _animationController.stop(); // Stop the animation
       _animationController.reset(); // Reset progress to start
-      _circlePositionNotifier.value = _routePoints.first.point; // Move marker to start
+      _circlePositionNotifier.value =
+          _routePoints.first.point; // Move marker to start
       setState(() {
         _isAnimating = false; // Ensure the state is properly updated
       });
@@ -158,16 +163,19 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     LatLng endPoint = path[endIndex];
 
     // Interpolate the position
-    double ratio = (distanceCovered - (distanceSoFar - Geolocator.distanceBetween(
-        startPoint.latitude, startPoint.longitude,
-        path[startIndex + 1].latitude, path[startIndex + 1].longitude
-    ))) /
+    double ratio = (distanceCovered -
+        (distanceSoFar - Geolocator.distanceBetween(
+            startPoint.latitude, startPoint.longitude,
+            path[startIndex + 1].latitude, path[startIndex + 1].longitude
+        ))) /
         (Geolocator.distanceBetween(
           startPoint.latitude, startPoint.longitude,
           endPoint.latitude, endPoint.longitude,
         ));
-    double lat = startPoint.latitude + (endPoint.latitude - startPoint.latitude) * ratio;
-    double lng = startPoint.longitude + (endPoint.longitude - startPoint.longitude) * ratio;
+    double lat = startPoint.latitude +
+        (endPoint.latitude - startPoint.latitude) * ratio;
+    double lng = startPoint.longitude +
+        (endPoint.longitude - startPoint.longitude) * ratio;
 
     LatLng interpolatedPosition = LatLng(lat, lng);
 
@@ -180,82 +188,154 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     return Scaffold(
       appBar: AppBar(
         title: const Text("Route Animation"),
+        actions: [
+          IconButton(
+            icon: Icon(_isControlsExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down),
+            onPressed: () {
+              setState(() {
+                _isControlsExpanded = !_isControlsExpanded; // Toggle the expansion
+              });
+            },
+          ),
+        ],
       ),
       body: _routePoints.isEmpty
-          ? const Center(child: Text("No route available"))
-          : OverflowBox(
-        alignment: Alignment.topLeft,
-        minWidth: 0,
-        minHeight: 0,
-        maxWidth: MediaQuery.of(context).size.width + 200, // Extra width for overflow
-        maxHeight: MediaQuery.of(context).size.height + 100, // Extra height for overflow
-        child: Transform.translate(
-          offset: const Offset(-200, -100), // Offset to allow overflow in all directions
-          child: FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              onPositionChanged: (position, hasGesture) {
-                setState(() {
-                  zoomLevel = position.zoom;
-                });
-              },
-            ),
-            children: [
-              // TileLayer for base map
-              TileLayer(
-                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-              ),
-              // PolylineLayer for route path
-              if (_routePoints.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routePoints.map((routePoint) => routePoint.point).toList(),
-                      color: Colors.blue,
-                      strokeWidth: 4.0,
-                    ),
-                  ],
+          ? const Center(child: Text("Choose a non-empty route to animate."))
+      : Stack(
+        children: [
+          // Map with OverflowBox
+          OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: 0,
+            minHeight: 0,
+            maxWidth: MediaQuery
+                .of(context)
+                .size
+                .width + 200,
+            // Extra width for overflow
+            maxHeight: MediaQuery
+                .of(context)
+                .size
+                .height + 100,
+            // Extra height for overflow
+            child: Transform.translate(
+              offset: const Offset(-200, -100),
+              // Offset to allow overflow in all directions
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: LatLng(59.322, 17.888),
+                  initialZoom: 10.0,
+                  onPositionChanged: (position, hasGesture) {
+                    setState(() {
+                      zoomLevel = position.zoom;
+                    });
+                  },
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                  ),
                 ),
-              // MarkerLayer for route points
-              MarkerLayer(
-                markers: _routePoints.map((routePoint) {
-                  return Marker(
-                    point: routePoint.point,
-                    width: 40.0, // Width of the marker
-                    height: 40.0, // Height of the marker
-                    child: Icon(
-                      Icons.location_on,
-                      color: _routePoints.indexOf(routePoint) == _currentMarkerIndex
-                          ? Colors.green
-                          : Colors.red,
-                    ),
-                  );
-                }).toList(),
-              ),
-              // Animated Circle Marker
-              ValueListenableBuilder<LatLng>(
-                valueListenable: _circlePositionNotifier,
-                builder: (context, position, child) {
-                  return MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: position, // Circle's position
-                        width: 40.0,
-                        height: 40.0,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                          ),
+                children: [
+                  // TileLayer for base map
+                  TileLayer(
+                    urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                  ),
+                  // PolylineLayer for route path
+                  if (_routePoints.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _routePoints.map((routePoint) =>
+                          routePoint.point).toList(),
+                          color: Colors.blue,
+                          strokeWidth: 4.0,
                         ),
+                      ],
+                    ),
+                  // MarkerLayer for route points
+                  MarkerLayer(
+                    markers: _routePoints.map((routePoint) {
+                      return Marker(
+                        point: routePoint.point,
+                        width: 40.0, // Width of the marker
+                        height: 40.0, // Height of the marker
+                        child: Icon(
+                          Icons.location_on,
+                          color: _routePoints.indexOf(routePoint) ==
+                              _currentMarkerIndex
+                              ? Colors.green
+                              : Colors.red,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  // Animated Circle Marker
+                  ValueListenableBuilder<LatLng>(
+                    valueListenable: _circlePositionNotifier,
+                    builder: (context, position, child) {
+                      return MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: position, // Circle's position
+                            width: 40.0,
+                            height: 40.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Positioned (only visible when _isControlsExpanded is true)
+          if (_isControlsExpanded)
+            Positioned(
+              top: 0,
+              left: 10.0,
+              right: 10.0,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 20.0), // Only horizontal padding
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10.0), // Rounded corners for the controls
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 4.0,
+                        offset: Offset(0, 2),
                       ),
                     ],
-                  );
-                },
+                  ),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        title: Text('Control 1'),
+                        onTap: () {
+                          // Handle control 1 action
+                        },
+                      ),
+                      ListTile(
+                        title: Text('Control 2'),
+                        onTap: () {
+                          // Handle control 2 action
+                        },
+                      ),
+                      // Add more controls here as needed
+                    ],
+                  ),
+                ),
               ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _toggleAnimation,
