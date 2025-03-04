@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/models/route_point.dart';
+import 'package:journeyjournal/utils/map_utils.dart';
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -40,9 +41,16 @@ class _AnimationScreenState extends State<AnimationScreen> {
         currentRoute = savedRoutes.last;
       }
     }
-
     _routePoints = currentRoute.routePoints;
     setState(() {});
+
+    if (currentRoute.routePoints.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 300), _fitMapToRoute);
+    }
+  }
+
+  void _fitMapToRoute() {
+    fitMapToRoute(_mapController, currentRoute.routePoints.map((rp) => rp.point).toList());
   }
 
   // Toggle animation
