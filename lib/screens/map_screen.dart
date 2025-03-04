@@ -21,6 +21,7 @@ class _MapScreenState extends State<MapScreen> {
   late RouteModel currentRoute;
   late TextEditingController _routeNameController;
   bool _isEditing = false;
+  bool _reverseMode = false;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -39,7 +40,8 @@ class _MapScreenState extends State<MapScreen> {
       // Fetch the saved routes asynchronously
       var savedRoutes = await RouteModel.loadRoutes();
       if (savedRoutes.isEmpty) {
-        currentRoute = await RouteModel.createNewRoute(); // Await to create and save a new route
+        currentRoute = await RouteModel
+            .createNewRoute(); // Await to create and save a new route
         print("Map screen new route: No saved routes");
       } else {
         currentRoute = savedRoutes.last;
@@ -48,6 +50,10 @@ class _MapScreenState extends State<MapScreen> {
     }
     _routeNameController = TextEditingController(text: currentRoute.name);
     setState(() {}); // Refresh the UI after loading the route
+
+    if (currentRoute.routePoints.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 300), _fitMapToRoute);
+    }
   }
 
   @override
@@ -59,18 +65,23 @@ class _MapScreenState extends State<MapScreen> {
   // Method to delete the route point
   void _deleteRoutePoint(RoutePoint routePoint) {
     setState(() {
-      currentRoute.routePoints.remove(routePoint); // Remove the route point from the list
+      currentRoute.routePoints.remove(
+          routePoint); // Remove the route point from the list
       currentRoute.save(); // Save the updated route
     });
   }
 
 // Method to save the route point's changes
-  void _saveRoutePoint(RoutePoint routePoint, TextEditingController titleController, TextEditingController descriptionController, DateTime? selectedDate) {
+  void _saveRoutePoint(RoutePoint routePoint,
+      TextEditingController titleController,
+      TextEditingController descriptionController, DateTime? selectedDate) {
     routePoint.title = titleController.text; // Update the title
-    routePoint.description = descriptionController.text; // Update the description
+    routePoint.description =
+        descriptionController.text; // Update the description
     routePoint.date = selectedDate; // Update the date
     // Ensure images are saved correctly
-    routePoint.images = List.from(routePoint.images); // Make sure the list is updated
+    routePoint.images =
+        List.from(routePoint.images); // Make sure the list is updated
     currentRoute.save(); // Save the updated route
   }
 
@@ -78,7 +89,7 @@ class _MapScreenState extends State<MapScreen> {
   void _addMarker(LatLng point) {
     RoutePoint newRoutePoint = RoutePoint();
     newRoutePoint.point = point;
-    newRoutePoint.images = [];  // Initialize images list
+    newRoutePoint.images = []; // Initialize images list
 
 
     if (currentRoute.routePoints.isEmpty) {
@@ -109,10 +120,44 @@ class _MapScreenState extends State<MapScreen> {
 
     if (!inserted) {
       setState(() {
-        currentRoute.routePoints.add(newRoutePoint);
+        if (_reverseMode) {
+          currentRoute.routePoints.insert(0, newRoutePoint); // Add at the beginning
+        } else {
+          currentRoute.routePoints.add(newRoutePoint); // Add at the end
+        }
         currentRoute.save();
       });
     }
+  }
+
+  void _fitMapToRoute() {
+    if (currentRoute.routePoints.isEmpty) return; // Skip if no points
+
+    List<LatLng> points = currentRoute.routePoints.map((rp) => rp.point).toList();
+    LatLngBounds bounds = LatLngBounds.fromPoints(points);
+
+    // Compute center of bounds
+    LatLng center = LatLng(
+      (bounds.north + bounds.south) / 2,
+      (bounds.east + bounds.west) / 2,
+    );
+
+    // Apply an offset to shift the center leftward (westward)
+    double longitudeOffset = (bounds.east - bounds.west) * 0.375; // Adjust as needed
+    LatLng adjustedCenter = LatLng(center.latitude, center.longitude - longitudeOffset);
+
+    // Define padding (prevents points from being too close to screen edges)
+    const double padding = 150.0; // Pixels
+
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: EdgeInsets.all(padding),
+      ),
+    );
+
+    // Move to the adjusted center after fitting bounds
+    _mapController.move(adjustedCenter, _mapController.camera.zoom);
   }
 
   // Create list of DragMarkers
@@ -127,8 +172,10 @@ class _MapScreenState extends State<MapScreen> {
             onTap: () {
               if (routePoint.hasInfo) {
                 // If the route point has info, show the dialog
-                TextEditingController titleController = TextEditingController(text: routePoint.title);
-                TextEditingController descriptionController = TextEditingController(text: routePoint.description);
+                TextEditingController titleController = TextEditingController(
+                    text: routePoint.title);
+                TextEditingController descriptionController = TextEditingController(
+                    text: routePoint.description);
                 DateTime? selectedDate = routePoint.date;
 
                 showRoutePointDialog(
@@ -137,8 +184,12 @@ class _MapScreenState extends State<MapScreen> {
                   titleController: titleController,
                   descriptionController: descriptionController,
                   selectedDate: selectedDate,
-                  onDelete: () => _deleteRoutePoint(routePoint), // Pass the delete callback
-                  onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate), // Pass the save callback
+                  onDelete: () => _deleteRoutePoint(routePoint),
+                  // Pass the delete callback
+                  onSave: () =>
+                      _saveRoutePoint(
+                          routePoint, titleController, descriptionController,
+                          selectedDate), // Pass the save callback
                 ).then((_) {
                   setState(() {}); // Refresh UI after dialog is closed
                 });
@@ -151,8 +202,10 @@ class _MapScreenState extends State<MapScreen> {
               }
             },
             onLongPress: () {
-              TextEditingController titleController = TextEditingController(text: routePoint.title);
-              TextEditingController descriptionController = TextEditingController(text: routePoint.description);
+              TextEditingController titleController = TextEditingController(
+                  text: routePoint.title);
+              TextEditingController descriptionController = TextEditingController(
+                  text: routePoint.description);
               DateTime? selectedDate = routePoint.date;
 
               showRoutePointDialog(
@@ -161,8 +214,12 @@ class _MapScreenState extends State<MapScreen> {
                 titleController: titleController,
                 descriptionController: descriptionController,
                 selectedDate: selectedDate,
-                onDelete: () => _deleteRoutePoint(routePoint), // Pass the delete callback
-                onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate), // Pass the save callback
+                onDelete: () => _deleteRoutePoint(routePoint),
+                // Pass the delete callback
+                onSave: () =>
+                    _saveRoutePoint(
+                        routePoint, titleController, descriptionController,
+                        selectedDate), // Pass the save callback
               ).then((_) {
                 setState(() {}); // Refresh UI after dialog is closed
               });
@@ -203,7 +260,8 @@ class _MapScreenState extends State<MapScreen> {
                       ? Icons.stars // Star icon for route points with info
                       : currentRoute.routePoints.indexOf(routePoint) == 0
                       ? Icons.trip_origin // First point, start of route
-                      : currentRoute.routePoints.indexOf(routePoint) == currentRoute.routePoints.length - 1
+                      : currentRoute.routePoints.indexOf(routePoint) ==
+                      currentRoute.routePoints.length - 1
                       ? Icons.flag_circle // Last point, end of route
                       : Icons.circle, // Normal points
                   size: isDragging ? 65 : 40,
@@ -219,10 +277,10 @@ class _MapScreenState extends State<MapScreen> {
           );
         },
         onDragEnd: (details, newPoint) {
-        setState(() {
-          routePoint.point = newPoint;
-        });
-      },
+          setState(() {
+            routePoint.point = newPoint;
+          });
+        },
 
       );
     }).toList();
@@ -256,9 +314,15 @@ class _MapScreenState extends State<MapScreen> {
         alignment: Alignment.topLeft,
         minWidth: 0,
         minHeight: 0,
-        maxWidth: MediaQuery.of(context).size.width + 200,
+        maxWidth: MediaQuery
+            .of(context)
+            .size
+            .width + 200,
         // Extra width for overflow
-        maxHeight: MediaQuery.of(context).size.height + 100,
+        maxHeight: MediaQuery
+            .of(context)
+            .size
+            .height + 100,
         // Extra height for overflow
         child: Transform.translate(
           offset: const Offset(-200, -100),
@@ -288,7 +352,8 @@ class _MapScreenState extends State<MapScreen> {
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
+                      points: currentRoute.routePoints.map((
+                          routePoint) => routePoint.point).toList(),
                       color: Colors.blue.withAlpha(180),
                       strokeWidth: 4.0,
                     ),
@@ -301,24 +366,47 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
       ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () async {
-            // Create the new route and save it
-            RouteModel newRoute = await RouteModel.createNewRoute(); // Await creation and saving
+      floatingActionButton: Stack(
+        children: [
+          // Left-side button (Toggle reverse mode)
+          Positioned(
+            left: 38, // Adjust position
+            bottom: 6,
+            child: FloatingActionButton(
+              onPressed: () {
+                setState(() {
+                  _reverseMode = !_reverseMode;
+                });
+              },
+              backgroundColor: _reverseMode ? Colors.blueGrey : null,
+              // Change color when active
+              child: const Icon(Icons.route),
+            ),
+          ),
 
-            // Schedule the navigation after the current frame
-            SchedulerBinding.instance.addPostFrameCallback((_) {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => MainScreen(initialRoute: newRoute),
-                ),
-                    (Route<dynamic> route) => false, // Removes all previous routes
-              );
-            });
-          },
-          child: const Icon(Icons.add),
-        )
+          // Right-side button (Create new route)
+          Positioned(
+            right: 6,
+            bottom: 6,
+            child: FloatingActionButton(
+              onPressed: () async {
+                RouteModel newRoute = await RouteModel.createNewRoute();
+
+                SchedulerBinding.instance.addPostFrameCallback((_) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MainScreen(initialRoute: newRoute),
+                    ),
+                        (Route<dynamic> route) => false,
+                  );
+                });
+              },
+              child: const Icon(Icons.add),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
