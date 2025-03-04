@@ -50,6 +50,10 @@ class _MapScreenState extends State<MapScreen> {
     }
     _routeNameController = TextEditingController(text: currentRoute.name);
     setState(() {}); // Refresh the UI after loading the route
+
+    if (currentRoute.routePoints.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 300), _fitMapToRoute);
+    }
   }
 
   @override
@@ -124,6 +128,36 @@ class _MapScreenState extends State<MapScreen> {
         currentRoute.save();
       });
     }
+  }
+
+  void _fitMapToRoute() {
+    if (currentRoute.routePoints.isEmpty) return; // Skip if no points
+
+    List<LatLng> points = currentRoute.routePoints.map((rp) => rp.point).toList();
+    LatLngBounds bounds = LatLngBounds.fromPoints(points);
+
+    // Compute center of bounds
+    LatLng center = LatLng(
+      (bounds.north + bounds.south) / 2,
+      (bounds.east + bounds.west) / 2,
+    );
+
+    // Apply an offset to shift the center leftward (westward)
+    double longitudeOffset = (bounds.east - bounds.west) * 0.375; // Adjust as needed
+    LatLng adjustedCenter = LatLng(center.latitude, center.longitude - longitudeOffset);
+
+    // Define padding (prevents points from being too close to screen edges)
+    const double padding = 150.0; // Pixels
+
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: EdgeInsets.all(padding),
+      ),
+    );
+
+    // Move to the adjusted center after fitting bounds
+    _mapController.move(adjustedCenter, _mapController.camera.zoom);
   }
 
   // Create list of DragMarkers
