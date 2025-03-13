@@ -19,18 +19,21 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   late RouteModel currentRoute;
   late List<RoutePoint> _routePoints;
   bool _isAnimating = false;
-  int _currentMarkerIndex = 0;
+  final int _currentMarkerIndex = 0;
   bool _isControlsExpanded = false;
-
+  int _startMarkerIndex = 0;
+  int _endMarkerIndex = 0;
+  bool _showRouteTitles = false;
+  String _selectedAspectRatio = "16:9";
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
 
   // Duration variable to control animation speed
-  Duration _animationDuration = const Duration(seconds: 10);
+  final Duration _animationDuration = const Duration(seconds: 10);
 
   // Add ValueNotifier to track the animated position
-  ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(
+  final ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(
       LatLng(0.0, 0.0));
 
   // Animation controller for smooth movement
@@ -109,6 +112,27 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       });
       _animateMarker(); // Start the animation fresh
     }
+  }
+
+  void _selectStartPoint() {
+    if (_routePoints.isNotEmpty) {
+      setState(() {
+        _startMarkerIndex = (_startMarkerIndex + 1) % _routePoints.length;
+      });
+    }
+  }
+
+  void _selectEndPoint() {
+    if (_routePoints.isNotEmpty) {
+      setState(() {
+        _endMarkerIndex = (_endMarkerIndex + 1) % _routePoints.length;
+      });
+    }
+  }
+
+  void _saveAnimation() {
+    // Placeholder for future video export logic
+    print("Save animation clicked!");
   }
 
   // Animate the marker smoothly along the polyline
@@ -301,40 +325,97 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
               left: 10.0,
               right: 10.0,
               child: Material(
-                color: Colors.transparent,
+                color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 20.0), // Only horizontal padding
+                  padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10.0), // Rounded corners for the controls
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 4.0,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
+                    color: Theme.of(context).appBarTheme.backgroundColor, // Match AppBar color
+                    borderRadius: BorderRadius.circular(10.0),
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ListTile(
-                        title: Text('Control 1'),
-                        onTap: () {
-                          // Handle control 1 action
+                      // Start & End Marker Selection
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () => _selectStartPoint(),
+                            child: Text("Set Start Point"),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => _selectEndPoint(),
+                            child: Text("Set End Point"),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 10),
+
+                      // Animation Speed Slider
+                      Text("Animation Speed"),
+                      Slider(
+                        value: _animationController.duration!.inSeconds.toDouble(),
+                        min: 1,
+                        max: 20,
+                        divisions: 19,
+                        label: "${_animationController.duration!.inSeconds}s",
+                        onChanged: (value) {
+                          setState(() {
+                            _animationController.duration = Duration(seconds: value.toInt());
+                          });
                         },
                       ),
-                      ListTile(
-                        title: Text('Control 2'),
-                        onTap: () {
-                          // Handle control 2 action
+                      SizedBox(height: 10),
+
+                      // Toggle for showing route point titles
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text("Show Route Point Titles"),
+                          Switch(
+                            value: _showRouteTitles,
+                            onChanged: (value) {
+                              setState(() {
+                                _showRouteTitles = value;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 10),
+
+                      // Aspect Ratio Selection
+                      Text("Aspect Ratio"),
+                      DropdownButton<String>(
+                        value: _selectedAspectRatio,
+                        items: ["16:9", "4:3", "1:1"].map((ratio) {
+                          return DropdownMenuItem<String>(
+                            value: ratio,
+                            child: Text(ratio),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedAspectRatio = value!;
+                          });
                         },
                       ),
-                      // Add more controls here as needed
+                      SizedBox(height: 10),
+
+                      // Save Animation Button
+                      Center(
+                        child: ElevatedButton.icon(
+                          onPressed: _saveAnimation,
+                          icon: Icon(Icons.save),
+                          label: Text("Save Animation"),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
+
         ],
       ),
       floatingActionButton: FloatingActionButton(
