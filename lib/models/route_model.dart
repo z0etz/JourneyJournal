@@ -12,7 +12,7 @@ class RouteModel {
   String name;
 
   @HiveField(2)
-  List<RoutePoint> routePoints;
+  List<RoutePoint> routePoints = [];
 
   RouteModel({
     required this.id,

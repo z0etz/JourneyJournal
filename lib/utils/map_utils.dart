@@ -1,3 +1,4 @@
+import 'dart:ffi';
 import 'dart:math';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -34,7 +35,7 @@ double getThreshold(double zoomLevel) {
   return 0.0002 * pow(2, (15 - zoomLevel));
 }
 
-void fitMapToRoute(MapController mapController, List<LatLng> routePoints) {
+void fitMapToRoute(MapController mapController, List<LatLng> routePoints, {bool isAnimationScreen = false}) {
   if (routePoints.isEmpty) return; // Skip if no points
 
   LatLngBounds bounds = LatLngBounds.fromPoints(routePoints);
@@ -45,12 +46,16 @@ void fitMapToRoute(MapController mapController, List<LatLng> routePoints) {
     (bounds.east + bounds.west) / 2,
   );
 
-  // Apply an offset to shift the center leftward (westward)
-  double longitudeOffset = (bounds.east - bounds.west) * 0.375; // Adjust as needed
-  LatLng adjustedCenter = LatLng(center.latitude, center.longitude - longitudeOffset);
-
   // Define padding (prevents points from being too close to screen edges)
-  const double padding = 150.0; // Pixels
+  double padding = 30.0; // Pixels
+  double longitudeOffset = 0;
+
+  // Apply an offset to shift the center leftward (westward) and adjust padding
+  if(!isAnimationScreen) {
+    longitudeOffset = (bounds.east - bounds.west) * 0.375; // Adjust as needed
+    padding = 150.0;
+  }
+  LatLng adjustedCenter = LatLng(center.latitude, center.longitude - longitudeOffset);
 
   mapController.fitCamera(
     CameraFit.bounds(

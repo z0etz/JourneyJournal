@@ -52,7 +52,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {}); // Refresh the UI after loading the route
 
     if (currentRoute.routePoints.isNotEmpty) {
-      Future.delayed(const Duration(milliseconds: 300), _fitMapToRoute);
+      Future.delayed(const Duration(milliseconds:50), _fitMapToRoute);
     }
   }
 
