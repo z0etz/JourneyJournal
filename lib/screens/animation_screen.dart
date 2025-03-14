@@ -17,7 +17,6 @@ class AnimationScreen extends StatefulWidget {
 
 class _AnimationScreenState extends State<AnimationScreen> with TickerProviderStateMixin {
   late RouteModel currentRoute;
-  late List<RoutePoint> _routePoints;
   bool _isAnimating = false;
   final int _currentMarkerIndex = 0;
   bool _isControlsExpanded = false;
@@ -79,13 +78,13 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         currentRoute = savedRoutes.last;
       }
     }
-    _routePoints = currentRoute.routePoints;
-    setState(() {});
 
     if (currentRoute.routePoints.isNotEmpty) {
       print("Fitting map");
-      Future.delayed(const Duration(milliseconds: 300), _fitMapToRoute);
+      Future.delayed(const Duration(milliseconds: 50), _fitMapToRoute);
     }
+
+    setState(() {});
 
     // Calculate the total distance of the route
     _calculateTotalDistance();
@@ -93,7 +92,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   void _fitMapToRoute() {
     fitMapToRoute(_mapController,
-        currentRoute.routePoints.map((rp) => rp.point).toList());
+        currentRoute.routePoints.map((rp) => rp.point).toList(), isAnimationScreen: true);
     print("Map fitted");
 
     // Ensure the circle is placed at the first point of the route when loaded
@@ -106,12 +105,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   // Calculate total distance of the route using Geolocator
   void _calculateTotalDistance() {
     double totalDistance = 0.0;
-    for (int i = 0; i < _routePoints.length - 1; i++) {
+    for (int i = 0; i < currentRoute.routePoints.length - 1; i++) {
       totalDistance += Geolocator.distanceBetween(
-        _routePoints[i].point.latitude,
-        _routePoints[i].point.longitude,
-        _routePoints[i + 1].point.latitude,
-        _routePoints[i + 1].point.longitude,
+        currentRoute.routePoints[i].point.latitude,
+        currentRoute.routePoints[i].point.longitude,
+        currentRoute.routePoints[i + 1].point.latitude,
+        currentRoute.routePoints[i + 1].point.longitude,
       );
     }
     _totalDistance = totalDistance;
@@ -134,7 +133,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _animationController.stop(); // Stop the animation
       _animationController.reset(); // Reset progress to start
       _circlePositionNotifier.value =
-          _routePoints.first.point; // Move marker to start
+          currentRoute.routePoints.first.point; // Move marker to start
       setState(() {
         _isAnimating = false; // Ensure the state is properly updated
       });
@@ -147,17 +146,17 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _selectStartPoint() {
-    if (_routePoints.isNotEmpty) {
+    if (currentRoute.routePoints.isNotEmpty) {
       setState(() {
-        _startMarkerIndex = (_startMarkerIndex + 1) % _routePoints.length;
+        _startMarkerIndex = (_startMarkerIndex + 1) % currentRoute.routePoints.length;
       });
     }
   }
 
   void _selectEndPoint() {
-    if (_routePoints.isNotEmpty) {
+    if (currentRoute.routePoints.isNotEmpty) {
       setState(() {
-        _endMarkerIndex = (_endMarkerIndex + 1) % _routePoints.length;
+        _endMarkerIndex = (_endMarkerIndex + 1) % currentRoute.routePoints.length;
       });
     }
   }
@@ -191,7 +190,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   // Move the circle along the polyline based on progress
   void _moveCircleAlongPath(double progress) {
-    List<LatLng> path = _routePoints.map((point) => point.point).toList();
+    List<LatLng> path = currentRoute.routePoints.map((point) => point.point).toList();
 
     // Calculate the total distance covered so far
     double distanceCovered = progress * _totalDistance;
@@ -255,7 +254,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           ),
         ],
       ),
-      body: _routePoints.isEmpty
+      body: currentRoute.routePoints.isEmpty
           ? const Center(child: Text("Choose a non-empty route to animate."))
       : Stack(
         children: [
@@ -300,27 +299,27 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                         TileLayer(
                           urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                         ),
-                        if (_routePoints.isNotEmpty)
+                        if (currentRoute.routePoints.isNotEmpty)
                           PolylineLayer(
                             polylines: [
                               Polyline(
-                                points: _routePoints.map((routePoint) => routePoint.point).toList(),
+                                points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
                                 color: Colors.blue,
                                 strokeWidth: 4.0,
                               ),
                             ],
                           ),
                         MarkerLayer(
-                          markers: _routePoints.map((routePoint) {
+                          markers: currentRoute.routePoints.map((routePoint) {
                             return Marker(
                               point: routePoint.point,
                               width: 40.0,
                               height: 40.0,
                               child: Icon(
                                 Icons.circle,
-                                color: _routePoints.indexOf(routePoint) == _currentMarkerIndex
+                                color: currentRoute.routePoints.indexOf(routePoint) == _currentMarkerIndex
                                     ? Colors.green
-                                    : Colors.red,
+                                    : Colors.blue,
                               ),
                             );
                           }).toList(),

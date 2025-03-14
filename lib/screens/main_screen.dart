@@ -67,19 +67,30 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildScreen() {
-    switch (_selectedIndex) {
-      case 0:
-        return MapScreen(initialRoute: widget.initialRoute);
-      case 1:
-        return AnimationScreen(initialRoute: widget.initialRoute);
-      case 2:
-        return const RouteScreen();
-      case 3:
-        return const CalendarScreen();
-      case 4:
-        return const SettingsScreen();
-      default:
-        return MapScreen(initialRoute: widget.initialRoute);
-    }
+    // Retrieve the latest saved route
+    return FutureBuilder<List<RouteModel>>(
+      future: RouteModel.loadRoutes(),
+      builder: (context, snapshot) {
+        RouteModel? latestRoute;
+        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+          latestRoute = snapshot.data!.last;
+        }
+
+        switch (_selectedIndex) {
+          case 0:
+            return MapScreen(initialRoute: latestRoute);
+          case 1:
+            return AnimationScreen(initialRoute: latestRoute);
+          case 2:
+            return const RouteScreen();
+          case 3:
+            return const CalendarScreen();
+          case 4:
+            return const SettingsScreen();
+          default:
+            return MapScreen(initialRoute: latestRoute);
+        }
+      },
+    );
   }
 }
