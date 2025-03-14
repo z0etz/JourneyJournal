@@ -35,16 +35,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          MapScreen(initialRoute: widget.initialRoute), // Pass initialRoute here
-          AnimationScreen(initialRoute: widget.initialRoute),
-          const RouteScreen(),
-          const CalendarScreen(),
-          const SettingsScreen(),
-        ],
-      ),
+      body: _buildScreen(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -73,5 +64,22 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildScreen() {
+    switch (_selectedIndex) {
+      case 0:
+        return MapScreen(initialRoute: widget.initialRoute);
+      case 1:
+        return AnimationScreen(initialRoute: widget.initialRoute);
+      case 2:
+        return const RouteScreen();
+      case 3:
+        return const CalendarScreen();
+      case 4:
+        return const SettingsScreen();
+      default:
+        return MapScreen(initialRoute: widget.initialRoute);
+    }
   }
 }

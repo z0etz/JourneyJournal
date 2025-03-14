@@ -57,6 +57,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   @override
   void initState() {
     super.initState();
+    print("Loading route");
     _loadRoute();
 
     // Initialize the animation controller with the vsync provided by this widget
@@ -82,6 +83,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     setState(() {});
 
     if (currentRoute.routePoints.isNotEmpty) {
+      print("Fitting map");
       Future.delayed(const Duration(milliseconds: 300), _fitMapToRoute);
     }
 
@@ -92,6 +94,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _fitMapToRoute() {
     fitMapToRoute(_mapController,
         currentRoute.routePoints.map((rp) => rp.point).toList());
+    print("Map fitted");
 
     // Ensure the circle is placed at the first point of the route when loaded
     if (currentRoute.routePoints.isNotEmpty) {
