@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
-import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:journeyjournal/utils/video_util.dart';
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -28,6 +28,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
   LatLng mapPosition = LatLng(59.322, 17.888);
+
+  GlobalKey repaintBoundaryKey = GlobalKey();
+  int frameCount = 100;
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -169,6 +172,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _saveAnimation() {
     // Placeholder for future video export logic
     print("Save animation clicked!");
+    SaveButton(
+      key: repaintBoundaryKey, // Pass the repaint boundary key
+      frameCount: frameCount,   // Specify the number of frames to capture
+    );
   }
 
   // Animate the marker smoothly along the polyline

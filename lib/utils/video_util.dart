@@ -3,15 +3,23 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:flutter/rendering.dart';  // To use RenderRepaintBoundary
-import 'package:journeyjournal/utils/permissions_util.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'permissions_util.dart';  // Import PermissionsUtil
 
 class SaveButton extends StatefulWidget {
   final GlobalKey key;
-  final int frameCount;  // Total number of frames in the animation
+  final int frameCount; // Total number of frames in the animation
+  final AnimationController animationController;
+  final ValueNotifier<LatLng> circlePositionNotifier;
 
-  SaveButton({required this.key, required this.frameCount});
+  SaveButton({
+    required this.key,
+    required this.frameCount,
+    required this.animationController,
+    required this.circlePositionNotifier,
+  });
 
   @override
   _SaveButtonState createState() => _SaveButtonState();
@@ -20,12 +28,13 @@ class SaveButton extends StatefulWidget {
 class _SaveButtonState extends State<SaveButton> {
   bool _isSaving = false;
 
+  // Step 1: Capture the frame dynamically as the animation progresses
   Future<void> _saveAnimation() async {
     setState(() {
       _isSaving = true;
     });
 
-    // Step 1: Request storage permissions
+    // Step 2: Request storage permissions
     bool isPermitted = await PermissionsUtil.requestPermissions();
     if (!isPermitted) {
       setState(() {
@@ -34,7 +43,7 @@ class _SaveButtonState extends State<SaveButton> {
       return;
     }
 
-    // Step 2: Initialize the video encoder with ProfileLevel
+    // Step 3: Initialize the video encoder with ProfileLevel
     final directory = await getApplicationDocumentsDirectory();
     final filepath = '${directory.path}/output_video.mp4';
 
@@ -50,46 +59,51 @@ class _SaveButtonState extends State<SaveButton> {
       filepath: filepath, // Output file location
     );
 
-    try {
-      // Step 3: Capture and append frames to video
-      for (int i = 0; i < widget.frameCount; i++) {
-        // Capture a frame as RGBA bytes
-        Uint8List rgbaFrame = await _captureFrame(i);
-        await FlutterQuickVideoEncoder.appendVideoFrame(rgbaFrame);
-
-        // Optionally append audio frame if needed
-        // Uint8List audioFrame = await _generateAudioFrame(i);
-        // await FlutterQuickVideoEncoder.appendAudioFrame(audioFrame);
+    // Step 4: Listen to the animation's progress and capture frames
+    int currentFrame = 0;
+    widget.animationController.addListener(() {
+      if (widget.animationController.isAnimating) {
+        // Capture frame at this point of animation
+        _captureFrame(currentFrame);
+        currentFrame++;
       }
+    });
 
-      // Step 4: Finalize the video encoding
-      await FlutterQuickVideoEncoder.finish();
+    // Start the animation when the save button is pressed
+    widget.animationController.forward();
 
-      setState(() {
-        _isSaving = false;
-      });
+    // Step 5: Finalize the video encoding when the animation is complete
+    widget.animationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        // Finish appending frames when the animation completes
+        FlutterQuickVideoEncoder.finish();
 
-      // Show video saved confirmation
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Video saved at: $filepath')));
-    } catch (e) {
-      setState(() {
-        _isSaving = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-    }
+        setState(() {
+          _isSaving = false;
+        });
+
+        // Show video saved confirmation
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Video saved at: $filepath')));
+      }
+    });
   }
 
   // Capture frame from the widget as RGBA data
-  Future<Uint8List> _captureFrame(int frameIndex) async {
+  Future<void> _captureFrame(int frameIndex) async {
     try {
-      RenderRepaintBoundary boundary =
-      widget.key.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      // Capture the current circle position from the notifier
+      LatLng currentPosition = widget.circlePositionNotifier.value;
+
+      // Render the widget with the updated position
+      RenderRepaintBoundary boundary = widget.key.currentContext!.findRenderObject() as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 1.0);
       ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-      return byteData!.buffer.asUint8List();
+      Uint8List rgbaFrame = byteData!.buffer.asUint8List();
+
+      // Append the captured frame to the video encoder
+      await FlutterQuickVideoEncoder.appendVideoFrame(rgbaFrame);
     } catch (e) {
       print("Error capturing frame: $e");
-      return Uint8List(0); // Return an empty byte array on error
     }
   }
 
@@ -101,3 +115,4 @@ class _SaveButtonState extends State<SaveButton> {
     );
   }
 }
+
