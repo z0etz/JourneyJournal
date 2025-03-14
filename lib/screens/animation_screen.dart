@@ -24,10 +24,22 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   int _startMarkerIndex = 0;
   int _endMarkerIndex = 0;
   bool _showRouteTitles = false;
-  String _selectedAspectRatio = "16:9";
+  String _selectedAspectRatio = "9:16";
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
+
+  double _getAspectRatioValue() {
+    switch (_selectedAspectRatio) {
+      case "4:3":
+        return 4 / 3;
+      case "1:1":
+        return 1.0;
+      case "9:16":
+      default:
+        return 9 / 16;
+    }
+  }
 
   // Duration variable to control animation speed
   final Duration _animationDuration = const Duration(seconds: 10);
@@ -80,6 +92,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _fitMapToRoute() {
     fitMapToRoute(_mapController,
         currentRoute.routePoints.map((rp) => rp.point).toList());
+
+    // Ensure the circle is placed at the first point of the route when loaded
+    if (currentRoute.routePoints.isNotEmpty) {
+      // Set the initial circle position to the first point in the route
+      _setInitialCirclePosition();
+    }
   }
 
   // Calculate total distance of the route using Geolocator
@@ -94,6 +112,17 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       );
     }
     _totalDistance = totalDistance;
+  }
+
+  void _setInitialCirclePosition() {
+    if (currentRoute.routePoints.isNotEmpty) {
+      // Set the circle's initial position to the first point of the route
+      LatLng firstPoint = currentRoute.routePoints.first.point;
+      setState(() {
+        // Directly set the position on the ValueNotifier
+        _circlePositionNotifier.value = firstPoint;
+      });
+    }
   }
 
   // Toggle animation
@@ -228,93 +257,95 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       : Stack(
         children: [
           // Map with OverflowBox
-          OverflowBox(
-            alignment: Alignment.topLeft,
-            minWidth: 0,
-            minHeight: 0,
-            maxWidth: MediaQuery
-                .of(context)
-                .size
-                .width + 200,
-            // Extra width for overflow
-            maxHeight: MediaQuery
-                .of(context)
-                .size
-                .height + 100,
-            // Extra height for overflow
-            child: Transform.translate(
-              offset: const Offset(-200, -100),
-              // Offset to allow overflow in all directions
-              child: FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: LatLng(59.322, 17.888),
-                  initialZoom: 10.0,
-                  onPositionChanged: (position, hasGesture) {
-                    setState(() {
-                      zoomLevel = position.zoom;
-                    });
-                  },
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-                  ),
+          // Map with fixed aspect ratio
+          Align(
+            alignment: Alignment.bottomCenter, // Move map to the bottom
+            child: Padding(
+              padding: const EdgeInsets.all(16.0), // Padding around the map
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white, // Background color
+                  borderRadius: BorderRadius.circular(12), // Rounded corners
+                  border: Border.all(color: Colors.black, width: 2), // Small black frame
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 6,
+                      offset: Offset(0, 4), // Subtle shadow
+                    ),
+                  ],
                 ),
-                children: [
-                  // TileLayer for base map
-                  TileLayer(
-                    urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  ),
-                  // PolylineLayer for route path
-                  if (_routePoints.isNotEmpty)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: _routePoints.map((routePoint) =>
-                          routePoint.point).toList(),
-                          color: Colors.blue,
-                          strokeWidth: 4.0,
+                child: AspectRatio(
+                  aspectRatio: _getAspectRatioValue(), // Dynamic aspect ratio
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10), // Match border radius
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: LatLng(59.322, 17.888),
+                        initialZoom: 10.0,
+                        onPositionChanged: (position, hasGesture) {
+                          setState(() {
+                            zoomLevel = position.zoom;
+                          });
+                        },
+                        interactionOptions: const InteractionOptions(
+                          flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                        ),
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                        ),
+                        if (_routePoints.isNotEmpty)
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: _routePoints.map((routePoint) => routePoint.point).toList(),
+                                color: Colors.blue,
+                                strokeWidth: 4.0,
+                              ),
+                            ],
+                          ),
+                        MarkerLayer(
+                          markers: _routePoints.map((routePoint) {
+                            return Marker(
+                              point: routePoint.point,
+                              width: 40.0,
+                              height: 40.0,
+                              child: Icon(
+                                Icons.circle,
+                                color: _routePoints.indexOf(routePoint) == _currentMarkerIndex
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        ValueListenableBuilder<LatLng>(
+                          valueListenable: _circlePositionNotifier,
+                          builder: (context, position, child) {
+                            return MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: position,
+                                  width: 40.0,
+                                  height: 40.0,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.green,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
-                  // MarkerLayer for route points
-                  MarkerLayer(
-                    markers: _routePoints.map((routePoint) {
-                      return Marker(
-                        point: routePoint.point,
-                        width: 40.0, // Width of the marker
-                        height: 40.0, // Height of the marker
-                        child: Icon(
-                          Icons.location_on,
-                          color: _routePoints.indexOf(routePoint) ==
-                              _currentMarkerIndex
-                              ? Colors.green
-                              : Colors.red,
-                        ),
-                      );
-                    }).toList(),
                   ),
-                  // Animated Circle Marker
-                  ValueListenableBuilder<LatLng>(
-                    valueListenable: _circlePositionNotifier,
-                    builder: (context, position, child) {
-                      return MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: position, // Circle's position
-                            width: 40.0,
-                            height: 40.0,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -388,7 +419,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       Text("Aspect Ratio"),
                       DropdownButton<String>(
                         value: _selectedAspectRatio,
-                        items: ["16:9", "4:3", "1:1"].map((ratio) {
+                        items: ["9:16", "4:3", "1:1"].map((ratio) {
                           return DropdownMenuItem<String>(
                             value: ratio,
                             child: Text(ratio),
