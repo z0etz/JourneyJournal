@@ -31,8 +31,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
-      case "4:3":
-        return 4 / 3;
+      case "16:9":
+        return 16 / 9;
+      case "3:2":
+        return 3 / 2;
+      case "2:3":
+        return 2 / 3;
       case "1:1":
         return 1.0;
       case "9:16":
@@ -427,7 +431,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       Text("Aspect Ratio"),
                       DropdownButton<String>(
                         value: _selectedAspectRatio,
-                        items: ["9:16", "4:3", "1:1"].map((ratio) {
+                        items: ["9:16", "16:9", "3:2", "2:3", "1:1"].map((ratio) {
                           return DropdownMenuItem<String>(
                             value: ratio,
                             child: Text(ratio),
