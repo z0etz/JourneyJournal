@@ -27,6 +27,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
+  LatLng mapPosition = LatLng(59.322, 17.888);
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -238,6 +239,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _circlePositionNotifier.value = interpolatedPosition;
   }
 
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -258,7 +261,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           ? const Center(child: Text("Choose a non-empty route to animate."))
       : Stack(
         children: [
-          // Map with OverflowBox
           // Map with fixed aspect ratio
           Align(
             alignment: Alignment.bottomCenter, // Move map to the bottom
@@ -284,11 +286,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                     child: FlutterMap(
                       mapController: _mapController,
                       options: MapOptions(
-                        initialCenter: LatLng(59.322, 17.888),
-                        initialZoom: 10.0,
+                        initialCenter: mapPosition,
+                        initialZoom: zoomLevel,
                         onPositionChanged: (position, hasGesture) {
                           setState(() {
                             zoomLevel = position.zoom;
+                            mapPosition = position.center;
                           });
                         },
                         interactionOptions: const InteractionOptions(
@@ -399,6 +402,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                         },
                       ),
                       SizedBox(height: 10),
+
+                      Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
+
 
                       // Toggle for showing route point titles
                       Row(
