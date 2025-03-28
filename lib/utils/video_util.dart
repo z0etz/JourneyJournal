@@ -44,8 +44,8 @@ class _SaveButtonState extends State<SaveButton> {
     }
 
     // Step 3: Initialize the video encoder with ProfileLevel
-    final directory = await getApplicationDocumentsDirectory();
-    final filepath = '${directory.path}/output_video.mp4';
+    final directory = await getExternalStorageDirectory();
+    final filepath = '${directory?.path}/output_video.mp4';
 
     await FlutterQuickVideoEncoder.setup(
       width: 1920,
@@ -61,11 +61,10 @@ class _SaveButtonState extends State<SaveButton> {
 
     // Step 4: Listen to the animation's progress and capture frames
     int currentFrame = 0;
-    widget.animationController.addListener(() {
+    widget.animationController.addListener(() async {
       if (widget.animationController.isAnimating) {
-        // Capture frame at this point of animation
-        _captureFrame(currentFrame);
-        currentFrame++;
+        await _captureFrame(currentFrame); // Await the capture process
+        currentFrame++;;
       }
     });
 
@@ -91,6 +90,8 @@ class _SaveButtonState extends State<SaveButton> {
   // Capture frame from the widget as RGBA data
   Future<void> _captureFrame(int frameIndex) async {
     try {
+      print("Capturing frame: $frameIndex");
+
       // Capture the current circle position from the notifier
       LatLng currentPosition = widget.circlePositionNotifier.value;
 
@@ -98,10 +99,19 @@ class _SaveButtonState extends State<SaveButton> {
       RenderRepaintBoundary boundary = widget.key.currentContext!.findRenderObject() as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 1.0);
       ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+
+      if (byteData == null) {
+        print("Failed to capture frame: $frameIndex (ByteData is null)");
+        return;
+      }
+
       Uint8List rgbaFrame = byteData!.buffer.asUint8List();
 
       // Append the captured frame to the video encoder
       await FlutterQuickVideoEncoder.appendVideoFrame(rgbaFrame);
+
+      print("Frame $frameIndex appended successfully");
+
     } catch (e) {
       print("Error capturing frame: $e");
     }

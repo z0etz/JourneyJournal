@@ -169,17 +169,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     }
   }
 
-  void _saveAnimation() {
-    // Placeholder for future video export logic
-    print("Save animation clicked!");
-    SaveButton(
-      key: repaintBoundaryKey, // Pass the repaint boundary key
-      frameCount: frameCount,   // Specify the number of frames to capture
-      animationController: _animationController,  // Pass your animation controller
-      circlePositionNotifier: _circlePositionNotifier, // Pass your circle position notifier
-    );
-  }
-
   // Animate the marker smoothly along the polyline
   void _animateMarker() {
     if (_isAnimating) {
@@ -459,10 +448,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
                       // Save Animation Button
                       Center(
-                        child: ElevatedButton.icon(
-                          onPressed: _saveAnimation,
-                          icon: Icon(Icons.save),
-                          label: Text("Save Animation"),
+                        child: SaveButton(
+                          key: repaintBoundaryKey, // The same key used in RepaintBoundary
+                          frameCount: frameCount,
+                          animationController: _animationController,
+                          circlePositionNotifier: _circlePositionNotifier,
                         ),
                       ),
                     ],
