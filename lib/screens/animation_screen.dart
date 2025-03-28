@@ -175,6 +175,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     SaveButton(
       key: repaintBoundaryKey, // Pass the repaint boundary key
       frameCount: frameCount,   // Specify the number of frames to capture
+      animationController: _animationController,  // Pass your animation controller
+      circlePositionNotifier: _circlePositionNotifier, // Pass your circle position notifier
     );
   }
 
@@ -290,6 +292,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                     ),
                   ],
                 ),
+                child: RepaintBoundary(
+                  key: repaintBoundaryKey,
                 child: AspectRatio(
                   aspectRatio: _getAspectRatioValue(), // Dynamic aspect ratio
                   child: ClipRRect(
@@ -364,6 +368,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 ),
               ),
             ),
+          ),
           ),
           // Positioned (only visible when _isControlsExpanded is true)
           if (_isControlsExpanded)
