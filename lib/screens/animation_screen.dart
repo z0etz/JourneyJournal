@@ -48,6 +48,23 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     }
   }
 
+  Size _getPixelDimensions() {
+    switch (_selectedAspectRatio) {
+      case "9:16":
+        return Size(576, 1024); // Width x Height
+      case "16:9":
+        return Size(1024, 576);
+      case "3:2":
+        return Size(768, 512);
+      case "2:3":
+        return Size(512, 768);
+      case "1:1":
+        return Size(512, 512);
+      default:
+        return Size(576, 1024); // Fallback to 9:16
+    }
+  }
+
   // Duration variable to control animation speed
   final Duration _animationDuration = const Duration(seconds: 10);
 
@@ -65,6 +82,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void initState() {
     super.initState();
     print("Loading route");
+    print("AnimationScreen repaintBoundaryKey initialized: $repaintBoundaryKey");
     _loadRoute();
 
     // Initialize the animation controller with the vsync provided by this widget
@@ -449,10 +467,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       // Save Animation Button
                       Center(
                         child: SaveButton(
-                          key: repaintBoundaryKey, // The same key used in RepaintBoundary
+                          mapKey: repaintBoundaryKey, // The same key used in RepaintBoundary
                           frameCount: frameCount,
                           animationController: _animationController,
                           circlePositionNotifier: _circlePositionNotifier,
+                          aspectRatio: _selectedAspectRatio,
                         ),
                       ),
                     ],
