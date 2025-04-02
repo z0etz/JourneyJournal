@@ -2,14 +2,14 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';  // To use RenderRepaintBoundary
+import 'package:flutter/rendering.dart';
 import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 
 class SaveButton extends StatefulWidget {
   final GlobalKey mapKey;
-  final int frameCount; // Total number of frames in the animation
+  final int frameCount;
   final AnimationController animationController;
   final ValueNotifier<LatLng> circlePositionNotifier;
   final String aspectRatio;
@@ -20,8 +20,8 @@ class SaveButton extends StatefulWidget {
     required this.animationController,
     required this.circlePositionNotifier,
     required this.aspectRatio,
-  }){
-    print("SaveButton received repaintBoundaryKey: $mapKey");
+  }) {
+    print("SaveButton received mapKey: $mapKey");
   }
 
   @override
@@ -34,7 +34,7 @@ class _SaveButtonState extends State<SaveButton> {
   Size _getPixelDimensions() {
     switch (widget.aspectRatio) {
       case "9:16":
-        return Size(576, 1024);
+        return Size(576, 1024); // Width x Height
       case "16:9":
         return Size(1024, 576);
       case "3:2":
@@ -44,11 +44,10 @@ class _SaveButtonState extends State<SaveButton> {
       case "1:1":
         return Size(512, 512);
       default:
-        return Size(576, 1024);
+        return Size(576, 1024); // Fallback to 9:16
     }
   }
 
-  // Directory to store temporary frames
   Future<Directory> _getTempFrameDir() async {
     final tempDir = await getTemporaryDirectory();
     final frameDir = Directory('${tempDir.path}/animation_frames');
@@ -58,7 +57,6 @@ class _SaveButtonState extends State<SaveButton> {
     return frameDir;
   }
 
-  // Capture and save a frame as PNG
   Future<String> _captureFrame(int frameIndex) async {
     try {
       print("Capturing frame: $frameIndex");
@@ -81,9 +79,25 @@ class _SaveButtonState extends State<SaveButton> {
       }
       RenderRepaintBoundary boundary = renderObject;
 
+      // Capture at on-screen size
       ui.Image image = await boundary.toImage(pixelRatio: 1.0);
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png); // Save as PNG
 
+      // Resize to even dimensions
+      final pixelSize = _getPixelDimensions();
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Rect.fromLTWH(0, 0, pixelSize.width, pixelSize.height),
+        Paint(),
+      );
+      final resizedImage = await recorder.endRecording().toImage(
+        pixelSize.width.toInt(),
+        pixelSize.height.toInt(),
+      );
+
+      ByteData? byteData = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
         print("Failed to capture frame: $frameIndex (ByteData is null)");
         return '';
@@ -94,7 +108,7 @@ class _SaveButtonState extends State<SaveButton> {
       final framePath = '${frameDir.path}/frame_$frameIndex.png';
       await File(framePath).writeAsBytes(pngBytes);
 
-      print("Frame $frameIndex saved at: $framePath");
+      print("Frame $frameIndex saved at: $framePath (size: ${pixelSize.width}x${pixelSize.height})");
       return framePath;
     } catch (e) {
       print("Error capturing frame: $e");
@@ -124,7 +138,6 @@ class _SaveButtonState extends State<SaveButton> {
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
 
-    // Step 1: Capture all frames as PNGs
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress = frame / totalFrames;
       widget.animationController.value = progress;
@@ -135,16 +148,18 @@ class _SaveButtonState extends State<SaveButton> {
       }
     }
 
-    // Step 2: Encode frames into video
     if (framePaths.isNotEmpty) {
-      final directory = await getExternalStorageDirectory();
-      final videoPath = '${directory?.path}/output_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+    // Get the Movies directory and create JourneyJournal subfolder
+      final dcimDir = Directory('/storage/emulated/0/DCIM/JourneyJournal');
+      if (!await dcimDir.exists()) {
+        await dcimDir.create(recursive: true);
+      }
+      final videoPath = '${dcimDir.path}/output_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final pixelSize = _getPixelDimensions();
 
-      // Get frame size from the first frame
-      ui.Image firstFrame = await decodeImageFromList(await File(framePaths.first).readAsBytes());
       await FlutterQuickVideoEncoder.setup(
-        width: firstFrame.width,
-        height: firstFrame.height,
+        width: pixelSize.width.toInt(),
+        height: pixelSize.height.toInt(),
         fps: 30,
         videoBitrate: 2500000,
         audioChannels: 0,
@@ -161,7 +176,6 @@ class _SaveButtonState extends State<SaveButton> {
       await FlutterQuickVideoEncoder.finish();
       print("Video saved at: $videoPath");
 
-      // Step 3: Clean up temporary frames
       final frameDir = await _getTempFrameDir();
       await frameDir.delete(recursive: true);
       print("Temporary frames deleted");
@@ -174,7 +188,7 @@ class _SaveButtonState extends State<SaveButton> {
     }
 
     setState(() => _isSaving = false);
-    print("Captured ${framePaths.length} frames");
+    print("Captured and encoded ${framePaths.length} frames");
   }
 
   @override
@@ -185,4 +199,3 @@ class _SaveButtonState extends State<SaveButton> {
     );
   }
 }
-
