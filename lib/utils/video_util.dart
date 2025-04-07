@@ -216,9 +216,12 @@ class _SaveButtonState extends State<SaveButton> {
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
+    const int zoomFrames = 30; // 1 second at 30fps
+    final int followFrames = totalFrames - 2 * zoomFrames; // Remaining frames for follow
 
     // Log for debugging
     print("Initial Zoom: ${widget.initialZoom}, Fit Zoom: ${widget.fitZoom}, Route Fits: $routeFits");
+    print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
 
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress = frame / totalFrames.clamp(1, double.infinity);
@@ -226,30 +229,32 @@ class _SaveButtonState extends State<SaveButton> {
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
 
       if (routeFits) {
-        // Static view: keep current zoom and center as-is
+        // Static view: keep current zoom and center
         print("Frame $frame (Static): Zoom ${widget.initialZoom}, Center ${widget.mapController.camera.center}");
       } else {
-        // Dynamic zoom: fit, zoom in, follow, zoom out
-        const double zoomInFraction = 0.1;
-        const double followFraction = 0.9;
+        // Dynamic zoom: 1s in, follow, 1s out
         LatLng currentPoint = widget.circlePositionNotifier.value;
 
-        if (progress <= zoomInFraction) {
-          if (frame == 0) {
-            // Start by fitting the map
-            fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
-                isAnimationScreen: true);
-            await Future.delayed(Duration(milliseconds: 100));
-          }
-          double t = progress / zoomInFraction;
+        if (frame == 0) {
+          // Start by fitting the map
+          fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
+              isAnimationScreen: true);
+          await Future.delayed(Duration(milliseconds: 100));
+        }
+
+        if (frame < zoomFrames) {
+          // Zoom in: 0 to 1 second
+          double t = frame / zoomFrames.toDouble();
           double zoom = widget.fitZoom + (widget.initialZoom - widget.fitZoom) * t;
           widget.mapController.move(currentPoint, zoom);
           print("Frame $frame (Zoom In): Zoom $zoom");
-        } else if (progress <= followFraction) {
+        } else if (frame < zoomFrames + followFrames) {
+          // Follow: remaining time minus last second
           widget.mapController.move(currentPoint, widget.initialZoom);
           print("Frame $frame (Follow): Zoom ${widget.initialZoom}");
         } else {
-          double t = (progress - followFraction) / (1.0 - followFraction);
+          // Zoom out: last 1 second
+          double t = (frame - (zoomFrames + followFrames)) / zoomFrames.toDouble();
           double zoom = widget.initialZoom - (widget.initialZoom - widget.fitZoom) * t;
           widget.mapController.move(currentPoint, zoom);
           print("Frame $frame (Zoom Out): Zoom $zoom");
