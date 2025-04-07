@@ -8,9 +8,7 @@ import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:journeyjournal/models/route_model.dart';
-import 'package:path_provider/path_provider.dart';
 
-// Utility functions moved here
 double calculateTotalDistance(RouteModel route) {
   double totalDistance = 0.0;
   for (int i = 0; i < route.routePoints.length - 1; i++) {
@@ -126,7 +124,7 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   Future<Directory> _getTempFrameDir() async {
-    final tempDir = await getTemporaryDirectory();
+    final tempDir = Directory('/data/user/0/com.journeyjournal.journeyjournal/cache');
     final frameDir = Directory('${tempDir.path}/animation_frames');
     if (!await frameDir.exists()) {
       await frameDir.create();
@@ -209,16 +207,51 @@ class _SaveButtonState extends State<SaveButton> {
     }
   }
 
+  double _computeMinZoom(LatLngBounds bounds) {
+    final distance = const Distance().as(LengthUnit.Kilometer, bounds.southWest, bounds.northEast);
+    return 15.0 - (distance / 10).clamp(0, 10); // Rough approximation
+  }
+
   Future<void> _saveAnimation() async {
     setState(() => _isSaving = true);
 
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
+    final bounds = LatLngBounds.fromPoints(widget.currentRoute.routePoints.map((rp) => rp.point).toList());
+    final minZoom = _computeMinZoom(bounds);
+    final bool pathFits = widget.initialZoom >= minZoom;
+
+    // Start with full route view (not captured)
+    widget.mapController.move(bounds.center, minZoom);
+    await Future.delayed(Duration(milliseconds: 100)); // Let map settle
 
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress = frame / totalFrames.clamp(1, double.infinity);
       widget.animationController.value = progress;
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
+
+      if (pathFits) {
+        // Static zoom, follow marker
+        widget.mapController.move(widget.circlePositionNotifier.value, widget.initialZoom);
+      } else {
+        // Dynamic zoom: in, follow, out
+        const double zoomInFraction = 0.1; // 1 sec at 30fps
+        const double followFraction = 0.9; // 80% of time
+        LatLng currentPoint = widget.circlePositionNotifier.value;
+
+        if (progress <= zoomInFraction) {
+          double t = progress / zoomInFraction;
+          double zoom = minZoom + (widget.initialZoom - minZoom) * t;
+          widget.mapController.move(currentPoint, zoom);
+        } else if (progress <= followFraction) {
+          widget.mapController.move(currentPoint, widget.initialZoom);
+        } else {
+          double t = (progress - followFraction) / (1.0 - followFraction);
+          double zoom = widget.initialZoom - (widget.initialZoom - minZoom) * t;
+          widget.mapController.move(currentPoint, zoom);
+        }
+      }
+
       await Future.delayed(Duration(milliseconds: (1000 / 30).round()));
       String framePath = await _captureFrame(frame);
       if (framePath.isNotEmpty) {
