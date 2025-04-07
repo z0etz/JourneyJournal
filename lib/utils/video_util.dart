@@ -217,9 +217,10 @@ class _SaveButtonState extends State<SaveButton> {
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
     const int zoomFrames = 30; // 1 second at 30fps
-    final int followFrames = totalFrames - 2 * zoomFrames; // Remaining frames for follow
+    final int followFrames = totalFrames - 2 * zoomFrames;
+    LatLng? fittedCenter; // Store the center after fitting
 
-    // Log for debugging
+    // Log initial state
     print("Initial Zoom: ${widget.initialZoom}, Fit Zoom: ${widget.fitZoom}, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
 
@@ -236,28 +237,31 @@ class _SaveButtonState extends State<SaveButton> {
         LatLng currentPoint = widget.circlePositionNotifier.value;
 
         if (frame == 0) {
-          // Start by fitting the map
+          // Fit the map, don’t center on marker yet
+          print("Fitting map at frame 0");
           fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
               isAnimationScreen: true);
           await Future.delayed(Duration(milliseconds: 100));
+          fittedCenter = widget.mapController.camera.center; // Save fitted center
+          print("After fit: Zoom ${widget.mapController.camera.zoom}, Center $fittedCenter");
         }
 
         if (frame < zoomFrames) {
-          // Zoom in: 0 to 1 second
+          // Zoom in: 0 to 1 second, keep fitted center
           double t = frame / zoomFrames.toDouble();
           double zoom = widget.fitZoom + (widget.initialZoom - widget.fitZoom) * t;
-          widget.mapController.move(currentPoint, zoom);
-          print("Frame $frame (Zoom In): Zoom $zoom");
+          widget.mapController.move(fittedCenter!, zoom);
+          print("Frame $frame (Zoom In): Zoom $zoom, Center $fittedCenter");
         } else if (frame < zoomFrames + followFrames) {
-          // Follow: remaining time minus last second
+          // Follow: remaining time minus last second, center on marker
           widget.mapController.move(currentPoint, widget.initialZoom);
-          print("Frame $frame (Follow): Zoom ${widget.initialZoom}");
+          print("Frame $frame (Follow): Zoom ${widget.initialZoom}, Center $currentPoint");
         } else {
-          // Zoom out: last 1 second
+          // Zoom out: last 1 second, return to fitted center
           double t = (frame - (zoomFrames + followFrames)) / zoomFrames.toDouble();
           double zoom = widget.initialZoom - (widget.initialZoom - widget.fitZoom) * t;
-          widget.mapController.move(currentPoint, zoom);
-          print("Frame $frame (Zoom Out): Zoom $zoom");
+          widget.mapController.move(fittedCenter!, zoom);
+          print("Frame $frame (Zoom Out): Zoom $zoom, Center $fittedCenter");
         }
       }
 
