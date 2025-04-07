@@ -3,9 +3,73 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:journeyjournal/models/route_model.dart';
 import 'package:path_provider/path_provider.dart';
+
+// Utility functions moved here
+double calculateTotalDistance(RouteModel route) {
+  double totalDistance = 0.0;
+  for (int i = 0; i < route.routePoints.length - 1; i++) {
+    totalDistance += Geolocator.distanceBetween(
+      route.routePoints[i].point.latitude,
+      route.routePoints[i].point.longitude,
+      route.routePoints[i + 1].point.latitude,
+      route.routePoints[i + 1].point.longitude,
+    );
+  }
+  return totalDistance;
+}
+
+void moveCircleAlongPath(
+    double progress,
+    RouteModel route,
+    ValueNotifier<LatLng> circlePositionNotifier,
+    double totalDistance,
+    ) {
+  List<LatLng> path = route.routePoints.map((point) => point.point).toList();
+  if (path.isEmpty) return;
+
+  double distanceCovered = progress * totalDistance;
+  double distanceSoFar = 0.0;
+  int startIndex = 0;
+  int endIndex = 1;
+
+  for (int i = 0; i < path.length - 1; i++) {
+    double segmentDistance = Geolocator.distanceBetween(
+      path[i].latitude,
+      path[i].longitude,
+      path[i + 1].latitude,
+      path[i + 1].longitude,
+    );
+    distanceSoFar += segmentDistance;
+
+    if (distanceSoFar >= distanceCovered) {
+      startIndex = i;
+      endIndex = i + 1;
+      break;
+    }
+  }
+
+  LatLng startPoint = path[startIndex];
+  LatLng endPoint = path[endIndex];
+  double segmentDistance = Geolocator.distanceBetween(
+    startPoint.latitude,
+    startPoint.longitude,
+    endPoint.latitude,
+    endPoint.longitude,
+  );
+  double ratio = segmentDistance > 0
+      ? (distanceCovered - (distanceSoFar - segmentDistance)) / segmentDistance
+      : 0.0;
+  double lat = startPoint.latitude + (endPoint.latitude - startPoint.latitude) * ratio;
+  double lng = startPoint.longitude + (endPoint.longitude - startPoint.longitude) * ratio;
+
+  circlePositionNotifier.value = LatLng(lat, lng);
+}
 
 class SaveButton extends StatefulWidget {
   final GlobalKey mapKey;
@@ -13,6 +77,9 @@ class SaveButton extends StatefulWidget {
   final AnimationController animationController;
   final ValueNotifier<LatLng> circlePositionNotifier;
   final String aspectRatio;
+  final MapController mapController;
+  final RouteModel currentRoute;
+  final double initialZoom;
 
   SaveButton({
     required this.mapKey,
@@ -20,6 +87,9 @@ class SaveButton extends StatefulWidget {
     required this.animationController,
     required this.circlePositionNotifier,
     required this.aspectRatio,
+    required this.mapController,
+    required this.currentRoute,
+    required this.initialZoom,
   }) {
     print("SaveButton received mapKey: $mapKey");
   }
@@ -30,11 +100,18 @@ class SaveButton extends StatefulWidget {
 
 class _SaveButtonState extends State<SaveButton> {
   bool _isSaving = false;
+  late double _totalDistance;
+
+  @override
+  void initState() {
+    super.initState();
+    _totalDistance = calculateTotalDistance(widget.currentRoute);
+  }
 
   Size _getPixelDimensions() {
     switch (widget.aspectRatio) {
       case "9:16":
-        return Size(576, 1024); // Width x Height
+        return Size(576, 1024);
       case "16:9":
         return Size(1024, 576);
       case "3:2":
@@ -44,7 +121,7 @@ class _SaveButtonState extends State<SaveButton> {
       case "1:1":
         return Size(512, 512);
       default:
-        return Size(576, 1024); // Fallback to 9:16
+        return Size(576, 1024);
     }
   }
 
@@ -139,8 +216,9 @@ class _SaveButtonState extends State<SaveButton> {
     List<String> framePaths = [];
 
     for (int frame = 0; frame < totalFrames; frame++) {
-      double progress = frame / totalFrames;
+      double progress = frame / totalFrames.clamp(1, double.infinity);
       widget.animationController.value = progress;
+      moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       await Future.delayed(Duration(milliseconds: (1000 / 30).round()));
       String framePath = await _captureFrame(frame);
       if (framePath.isNotEmpty) {
@@ -149,7 +227,6 @@ class _SaveButtonState extends State<SaveButton> {
     }
 
     if (framePaths.isNotEmpty) {
-    // Get the Movies directory and create JourneyJournal subfolder
       final dcimDir = Directory('/storage/emulated/0/DCIM/JourneyJournal');
       if (!await dcimDir.exists()) {
         await dcimDir.create(recursive: true);
