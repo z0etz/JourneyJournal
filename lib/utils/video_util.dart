@@ -8,6 +8,7 @@ import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:journeyjournal/models/route_model.dart';
+import 'package:journeyjournal/utils/map_utils.dart';
 
 double calculateTotalDistance(RouteModel route) {
   double totalDistance = 0.0;
@@ -78,6 +79,7 @@ class SaveButton extends StatefulWidget {
   final MapController mapController;
   final RouteModel currentRoute;
   final double initialZoom;
+  final double fitZoom;
 
   SaveButton({
     required this.mapKey,
@@ -88,6 +90,7 @@ class SaveButton extends StatefulWidget {
     required this.mapController,
     required this.currentRoute,
     required this.initialZoom,
+    required this.fitZoom,
   }) {
     print("SaveButton received mapKey: $mapKey");
   }
@@ -207,48 +210,49 @@ class _SaveButtonState extends State<SaveButton> {
     }
   }
 
-  double _computeMinZoom(LatLngBounds bounds) {
-    final distance = const Distance().as(LengthUnit.Kilometer, bounds.southWest, bounds.northEast);
-    return 15.0 - (distance / 10).clamp(0, 10); // Rough approximation
-  }
-
   Future<void> _saveAnimation() async {
     setState(() => _isSaving = true);
 
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
-    final bounds = LatLngBounds.fromPoints(widget.currentRoute.routePoints.map((rp) => rp.point).toList());
-    final minZoom = _computeMinZoom(bounds);
-    final bool pathFits = widget.initialZoom >= minZoom;
+    final bool routeFits = widget.initialZoom <= widget.fitZoom;
 
-    // Start with full route view (not captured)
-    widget.mapController.move(bounds.center, minZoom);
-    await Future.delayed(Duration(milliseconds: 100)); // Let map settle
+    // Log for debugging
+    print("Initial Zoom: ${widget.initialZoom}, Fit Zoom: ${widget.fitZoom}, Route Fits: $routeFits");
 
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress = frame / totalFrames.clamp(1, double.infinity);
       widget.animationController.value = progress;
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
 
-      if (pathFits) {
-        // Static zoom, follow marker
-        widget.mapController.move(widget.circlePositionNotifier.value, widget.initialZoom);
+      if (routeFits) {
+        // Static view: keep current zoom and center as-is
+        print("Frame $frame (Static): Zoom ${widget.initialZoom}, Center ${widget.mapController.camera.center}");
       } else {
-        // Dynamic zoom: in, follow, out
-        const double zoomInFraction = 0.1; // 1 sec at 30fps
-        const double followFraction = 0.9; // 80% of time
+        // Dynamic zoom: fit, zoom in, follow, zoom out
+        const double zoomInFraction = 0.1;
+        const double followFraction = 0.9;
         LatLng currentPoint = widget.circlePositionNotifier.value;
 
         if (progress <= zoomInFraction) {
+          if (frame == 0) {
+            // Start by fitting the map
+            fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
+                isAnimationScreen: true);
+            await Future.delayed(Duration(milliseconds: 100));
+          }
           double t = progress / zoomInFraction;
-          double zoom = minZoom + (widget.initialZoom - minZoom) * t;
+          double zoom = widget.fitZoom + (widget.initialZoom - widget.fitZoom) * t;
           widget.mapController.move(currentPoint, zoom);
+          print("Frame $frame (Zoom In): Zoom $zoom");
         } else if (progress <= followFraction) {
           widget.mapController.move(currentPoint, widget.initialZoom);
+          print("Frame $frame (Follow): Zoom ${widget.initialZoom}");
         } else {
           double t = (progress - followFraction) / (1.0 - followFraction);
-          double zoom = widget.initialZoom - (widget.initialZoom - minZoom) * t;
+          double zoom = widget.initialZoom - (widget.initialZoom - widget.fitZoom) * t;
           widget.mapController.move(currentPoint, zoom);
+          print("Frame $frame (Zoom Out): Zoom $zoom");
         }
       }
 

@@ -3,7 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:journeyjournal/utils/video_util.dart';
 
 class AnimationScreen extends StatefulWidget {
@@ -27,6 +26,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
+  double fitZoom = 10.0; // Store the zoom level after fitting
   LatLng mapPosition = LatLng(59.322, 17.888);
 
   GlobalKey repaintBoundaryKey = GlobalKey();
@@ -99,9 +99,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _fitMapToRoute() {
     fitMapToRoute(_mapController,
         currentRoute.routePoints.map((rp) => rp.point).toList(), isAnimationScreen: true);
-    print("Map fitted");
-
-    // Ensure the circle is placed at the first point of the route when loaded
+    setState(() {
+      fitZoom = _mapController.camera.zoom; // Capture the zoom level after fitting
+    });
+    print("Map fitted, Fit Zoom: $fitZoom");
     if (currentRoute.routePoints.isNotEmpty) {
       _setInitialCirclePosition();
     }
@@ -320,8 +321,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       Text("Animation Duration"),
                       Slider(
                         value: _animationController.duration!.inSeconds.toDouble(),
-                        min: 1,
-                        max: 20,
+                        min: 3,
+                        max: 22,
                         divisions: 19,
                         label: "${_animationController.duration!.inSeconds}s",
                         onChanged: (value) {
@@ -379,6 +380,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                           mapController: _mapController,
                           currentRoute: currentRoute,
                           initialZoom: zoomLevel,
+                          fitZoom: fitZoom, // Pass the fit zoom
                         ),
                       ),
                     ],
