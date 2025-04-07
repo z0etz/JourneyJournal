@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
-import 'package:journeyjournal/models/route_point.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:journeyjournal/utils/video_util.dart';
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -27,7 +26,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
+  double fitZoom = 10.0; // Store the zoom level after fitting
   LatLng mapPosition = LatLng(59.322, 17.888);
+
+  GlobalKey repaintBoundaryKey = GlobalKey();
+  int frameCount = 100;
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -62,9 +65,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void initState() {
     super.initState();
     print("Loading route");
+    print("AnimationScreen repaintBoundaryKey initialized: $repaintBoundaryKey");
     _loadRoute();
 
-    // Initialize the animation controller with the vsync provided by this widget
     _animationController = AnimationController(
       vsync: this,
       duration: _animationDuration, // Duration for the entire movement
@@ -90,63 +93,43 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     }
 
     setState(() {});
-
-    // Calculate the total distance of the route
-    _calculateTotalDistance();
+    _totalDistance = calculateTotalDistance(currentRoute);
   }
 
   void _fitMapToRoute() {
     fitMapToRoute(_mapController,
         currentRoute.routePoints.map((rp) => rp.point).toList(), isAnimationScreen: true);
-    print("Map fitted");
-
-    // Ensure the circle is placed at the first point of the route when loaded
+    setState(() {
+      fitZoom = _mapController.camera.zoom; // Capture the zoom level after fitting
+    });
+    print("Map fitted, Fit Zoom: $fitZoom");
     if (currentRoute.routePoints.isNotEmpty) {
-      // Set the initial circle position to the first point in the route
       _setInitialCirclePosition();
     }
   }
 
-  // Calculate total distance of the route using Geolocator
-  void _calculateTotalDistance() {
-    double totalDistance = 0.0;
-    for (int i = 0; i < currentRoute.routePoints.length - 1; i++) {
-      totalDistance += Geolocator.distanceBetween(
-        currentRoute.routePoints[i].point.latitude,
-        currentRoute.routePoints[i].point.longitude,
-        currentRoute.routePoints[i + 1].point.latitude,
-        currentRoute.routePoints[i + 1].point.longitude,
-      );
-    }
-    _totalDistance = totalDistance;
-  }
-
   void _setInitialCirclePosition() {
     if (currentRoute.routePoints.isNotEmpty) {
-      // Set the circle's initial position to the first point of the route
       LatLng firstPoint = currentRoute.routePoints.first.point;
       setState(() {
-        // Directly set the position on the ValueNotifier
         _circlePositionNotifier.value = firstPoint;
       });
     }
   }
 
-  // Toggle animation
   void _toggleAnimation() {
     if (_isAnimating) {
-      _animationController.stop(); // Stop the animation
-      _animationController.reset(); // Reset progress to start
-      _circlePositionNotifier.value =
-          currentRoute.routePoints.first.point; // Move marker to start
+      _animationController.stop();
+      _animationController.reset();
+      _circlePositionNotifier.value = currentRoute.routePoints.first.point;
       setState(() {
-        _isAnimating = false; // Ensure the state is properly updated
+        _isAnimating = false;
       });
     } else {
       setState(() {
         _isAnimating = true;
       });
-      _animateMarker(); // Start the animation fresh
+      _animateMarker();
     }
   }
 
@@ -166,25 +149,18 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     }
   }
 
-  void _saveAnimation() {
-    // Placeholder for future video export logic
-    print("Save animation clicked!");
-  }
-
-  // Animate the marker smoothly along the polyline
   void _animateMarker() {
     if (_isAnimating) {
-      // Create a Tween for progress (0.0 to 1.0)
       _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
         CurvedAnimation(
           parent: _animationController,
-          curve: Curves.linear, // Linear curve for smooth constant speed
+          curve: Curves.linear,
         ),
       );
 
       // Add listener to update the position of the circle
       _progressAnimation.addListener(() {
-        _moveCircleAlongPath(_progressAnimation.value);
+        moveCircleAlongPath(_progressAnimation.value, currentRoute, _circlePositionNotifier, _totalDistance);
       });
 
       // Start the animation from the beginning
@@ -192,58 +168,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _animationController.forward();
     }
   }
-
-  // Move the circle along the polyline based on progress
-  void _moveCircleAlongPath(double progress) {
-    List<LatLng> path = currentRoute.routePoints.map((point) => point.point).toList();
-
-    // Calculate the total distance covered so far
-    double distanceCovered = progress * _totalDistance;
-
-    // Now we need to find where this distance lies on the path
-    double distanceSoFar = 0.0;
-    int startIndex = 0;
-    int endIndex = 1;
-
-    for (int i = 0; i < path.length - 1; i++) {
-      double segmentDistance = Geolocator.distanceBetween(
-          path[i].latitude, path[i].longitude,
-          path[i + 1].latitude, path[i + 1].longitude
-      );
-      distanceSoFar += segmentDistance;
-
-      if (distanceSoFar >= distanceCovered) {
-        startIndex = i;
-        endIndex = i + 1;
-        break;
-      }
-    }
-
-    LatLng startPoint = path[startIndex];
-    LatLng endPoint = path[endIndex];
-
-    // Interpolate the position
-    double ratio = (distanceCovered -
-        (distanceSoFar - Geolocator.distanceBetween(
-            startPoint.latitude, startPoint.longitude,
-            path[startIndex + 1].latitude, path[startIndex + 1].longitude
-        ))) /
-        (Geolocator.distanceBetween(
-          startPoint.latitude, startPoint.longitude,
-          endPoint.latitude, endPoint.longitude,
-        ));
-    double lat = startPoint.latitude +
-        (endPoint.latitude - startPoint.latitude) * ratio;
-    double lng = startPoint.longitude +
-        (endPoint.longitude - startPoint.longitude) * ratio;
-
-    LatLng interpolatedPosition = LatLng(lat, lng);
-
-    // Update the circle position with the new interpolated position
-    _circlePositionNotifier.value = interpolatedPosition;
-  }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -263,18 +187,18 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       ),
       body: currentRoute.routePoints.isEmpty
           ? const Center(child: Text("Choose a non-empty route to animate."))
-      : Stack(
+          : Stack(
         children: [
           // Map with fixed aspect ratio
           Align(
-            alignment: Alignment.bottomCenter, // Move map to the bottom
+            alignment: Alignment.bottomCenter,
             child: Padding(
               padding: const EdgeInsets.all(16.0), // Padding around the map
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white, // Background color
-                  borderRadius: BorderRadius.circular(12), // Rounded corners
-                  border: Border.all(color: Colors.black, width: 2), // Small black frame
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.black, width: 2),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black26,
@@ -283,82 +207,84 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                     ),
                   ],
                 ),
-                child: AspectRatio(
-                  aspectRatio: _getAspectRatioValue(), // Dynamic aspect ratio
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10), // Match border radius
-                    child: FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: mapPosition,
-                        initialZoom: zoomLevel,
-                        onPositionChanged: (position, hasGesture) {
-                          setState(() {
-                            zoomLevel = position.zoom;
-                            mapPosition = position.center;
-                          });
-                        },
-                        interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-                        ),
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                        ),
-                        if (currentRoute.routePoints.isNotEmpty)
-                          PolylineLayer(
-                            polylines: [
-                              Polyline(
-                                points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
-                                color: Colors.blue,
-                                strokeWidth: 4.0,
-                              ),
-                            ],
+                child: RepaintBoundary(
+                  key: repaintBoundaryKey,
+                  child: AspectRatio(
+                    aspectRatio: _getAspectRatioValue(),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: mapPosition,
+                          initialZoom: zoomLevel,
+                          onPositionChanged: (position, hasGesture) {
+                            setState(() {
+                              zoomLevel = position.zoom;
+                              mapPosition = position.center;
+                            });
+                          },
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
                           ),
-                        MarkerLayer(
-                          markers: currentRoute.routePoints.map((routePoint) {
-                            return Marker(
-                              point: routePoint.point,
-                              width: 40.0,
-                              height: 40.0,
-                              child: Icon(
-                                Icons.circle,
-                                color: currentRoute.routePoints.indexOf(routePoint) == _currentMarkerIndex
-                                    ? Colors.green
-                                    : Colors.blue,
-                              ),
-                            );
-                          }).toList(),
                         ),
-                        ValueListenableBuilder<LatLng>(
-                          valueListenable: _circlePositionNotifier,
-                          builder: (context, position, child) {
-                            return MarkerLayer(
-                              markers: [
-                                Marker(
-                                  point: position,
-                                  width: 40.0,
-                                  height: 40.0,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
+                        children: [
+                          TileLayer(
+                            urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                          ),
+                          if (currentRoute.routePoints.isNotEmpty)
+                            PolylineLayer(
+                              polylines: [
+                                Polyline(
+                                  points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
+                                  color: Colors.blue,
+                                  strokeWidth: 4.0,
                                 ),
                               ],
-                            );
-                          },
-                        ),
-                      ],
+                            ),
+                          MarkerLayer(
+                            markers: currentRoute.routePoints.map((routePoint) {
+                              return Marker(
+                                point: routePoint.point,
+                                width: 40.0,
+                                height: 40.0,
+                                child: Icon(
+                                  Icons.circle,
+                                  color: currentRoute.routePoints.indexOf(routePoint) == _currentMarkerIndex
+                                      ? Colors.green
+                                      : Colors.blue,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          ValueListenableBuilder<LatLng>(
+                            valueListenable: _circlePositionNotifier,
+                            builder: (context, position, child) {
+                              return MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: position,
+                                    width: 40.0,
+                                    height: 40.0,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-          // Positioned (only visible when _isControlsExpanded is true)
           if (_isControlsExpanded)
             Positioned(
               top: 0,
@@ -392,11 +318,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       SizedBox(height: 10),
 
                       // Animation Speed Slider
-                      Text("Animation Speed"),
+                      Text("Animation Duration"),
                       Slider(
                         value: _animationController.duration!.inSeconds.toDouble(),
-                        min: 1,
-                        max: 20,
+                        min: 3,
+                        max: 22,
                         divisions: 19,
                         label: "${_animationController.duration!.inSeconds}s",
                         onChanged: (value) {
@@ -406,9 +332,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                         },
                       ),
                       SizedBox(height: 10),
-
                       Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
-
 
                       // Toggle for showing route point titles
                       Row(
@@ -447,10 +371,16 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
                       // Save Animation Button
                       Center(
-                        child: ElevatedButton.icon(
-                          onPressed: _saveAnimation,
-                          icon: Icon(Icons.save),
-                          label: Text("Save Animation"),
+                        child: SaveButton(
+                          mapKey: repaintBoundaryKey,
+                          frameCount: frameCount,
+                          animationController: _animationController,
+                          circlePositionNotifier: _circlePositionNotifier,
+                          aspectRatio: _selectedAspectRatio,
+                          mapController: _mapController,
+                          currentRoute: currentRoute,
+                          initialZoom: zoomLevel,
+                          fitZoom: fitZoom, // Pass the fit zoom
                         ),
                       ),
                     ],
@@ -458,7 +388,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 ),
               ),
             ),
-
         ],
       ),
       floatingActionButton: FloatingActionButton(
