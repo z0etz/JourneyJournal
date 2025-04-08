@@ -16,13 +16,15 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  RouteModel? lastViewedRoute; // Tracks the last viewed route
 
   @override
   void initState() {
     super.initState();
     if (widget.initialRoute != null) {
-      print("Widget route: ${widget.initialRoute?.name ?? 'No route'}");
-      _selectedIndex = 0; // Make sure MapScreen is selected
+      print("MainScreen init with route: ${widget.initialRoute?.name}");
+      lastViewedRoute = widget.initialRoute;
+      _selectedIndex = 0; // Start on MapScreen
     }
   }
 
@@ -39,48 +41,52 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed, // Ensures all icons are visible
+        type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.play_arrow),
-            label: 'Animate',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.directions),
-            label: 'Routes',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today),
-            label: 'Calendar',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
+          BottomNavigationBarItem(icon: Icon(Icons.play_arrow), label: 'Animate'),
+          BottomNavigationBarItem(icon: Icon(Icons.directions), label: 'Routes'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Calendar'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
     );
   }
 
   Widget _buildScreen() {
-    // Retrieve the latest saved route
     return FutureBuilder<List<RouteModel>>(
       future: RouteModel.loadRoutes(),
       builder: (context, snapshot) {
-        RouteModel? latestRoute;
-        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-          latestRoute = snapshot.data!.last;
+        RouteModel? displayRoute;
+
+        // 1. Clicked route from RouteScreen
+        if (widget.initialRoute != null) {
+          displayRoute = widget.initialRoute;
+          lastViewedRoute = displayRoute; // Update last viewed
+          print("Using clicked route: ${displayRoute?.name}");
+        }
+        // 2. Last viewed route when switching screens
+        else if (lastViewedRoute != null) {
+          displayRoute = lastViewedRoute;
+          print("Using last viewed route: ${displayRoute?.name}");
+        }
+        // 3. Last saved route if no last viewed
+        else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+          displayRoute = snapshot.data!.last;
+          lastViewedRoute = displayRoute; // Set as last viewed
+          print("Using last saved route: ${displayRoute?.name}");
+        }
+        // 4. No routes exist (handled by MapScreen/AnimationScreen)
+        else {
+          displayRoute = null;
+          print("No routes exist");
         }
 
         switch (_selectedIndex) {
           case 0:
-            return MapScreen(initialRoute: latestRoute);
+            return MapScreen(initialRoute: displayRoute);
           case 1:
-            return AnimationScreen(initialRoute: latestRoute);
+            return AnimationScreen(initialRoute: displayRoute);
           case 2:
             return const RouteScreen();
           case 3:
@@ -88,7 +94,7 @@ class _MainScreenState extends State<MainScreen> {
           case 4:
             return const SettingsScreen();
           default:
-            return MapScreen(initialRoute: latestRoute);
+            return MapScreen(initialRoute: displayRoute);
         }
       },
     );
