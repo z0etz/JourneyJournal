@@ -157,11 +157,11 @@ class _SaveButtonState extends State<SaveButton> {
       }
       RenderRepaintBoundary boundary = renderObject;
 
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0); // Try 3.0 for sharper images
+      ui.Image image = await boundary.toImage(pixelRatio: 1.0);
       final pixelSize = _getPixelDimensions();
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      Paint paint = Paint()..filterQuality = FilterQuality.high; // Higher quality scaling
+      Paint paint = Paint()..filterQuality = FilterQuality.high;
       canvas.drawImageRect(
         image,
         Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
@@ -214,9 +214,14 @@ class _SaveButtonState extends State<SaveButton> {
     return LatLng(lat, lng);
   }
 
+  double _easeInQuad(double t) {
+    // Slow start, fast finish
+    return t * t;
+  }
+
   double _easeOutQuad(double t) {
-    // Ease-out: fast start, slow finish
-    return 1 - (1 - t) * (1 - t);
+    // Fast start, slow finish
+    return t * (2 - t);
   }
 
   Future<void> _saveAnimation() async {
@@ -265,27 +270,29 @@ class _SaveButtonState extends State<SaveButton> {
         }
 
         if (frame < zoomFrames) {
-          // Zoom in linearly, pan with ease-out
+          // Zoom In: Slow zoom start, fast finish; Fast pan start, slow finish
           double t = frame / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
-          double panT = _easeOutQuad(t); // Fast pan at start, slows down
-          double zoom = fitZoom + (initialZoom - fitZoom) * t; // Linear zoom
+          double zoomT = _easeInQuad(t);
+          double panT = _easeOutQuad(t);
+          double zoom = fitZoom + (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(fittedCenter!, startPoint, panT);
           widget.mapController.move(center, zoom);
-          print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Pan t: $panT, Actual Zoom: ${widget.mapController.camera.zoom}");
+          print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT, Actual Zoom: ${widget.mapController.camera.zoom}");
         } else if (frame < zoomFrames + followFrames) {
           // Follow: full route animation
           widget.mapController.move(currentPoint, initialZoom);
           print("Frame $frame (Follow): Zoom $initialZoom, Center $currentPoint, Progress: $progress, Actual Zoom: ${widget.mapController.camera.zoom}");
         } else {
-          // Zoom out linearly, pan with ease-out
+          // Zoom Out: Slow zoom start, fast finish; Fast pan start, slow finish
           double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
-          double panT = _easeOutQuad(t); // Fast pan at start, slows down
-          double zoom = initialZoom - (initialZoom - fitZoom) * t; // Linear zoom
+          double zoomT = _easeInQuad(t); // Slow start, fast finish
+          double panT = _easeOutQuad(t); // Fast start, slow finish
+          double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
           widget.mapController.move(center, zoom);
-          print("Frame $frame (Zoom Out): Zoom $zoom, Center $center, t: $t, Pan t: $panT, Actual Zoom: ${widget.mapController.camera.zoom}");
+          print("Frame $frame (Zoom Out): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT, Actual Zoom: ${widget.mapController.camera.zoom}");
         }
       }
 
@@ -308,7 +315,7 @@ class _SaveButtonState extends State<SaveButton> {
         width: pixelSize.width.toInt(),
         height: pixelSize.height.toInt(),
         fps: 30,
-        videoBitrate: 8000000, // Increased for sharper video
+        videoBitrate: 8000000,
         audioChannels: 0,
         audioBitrate: 0,
         sampleRate: 0,
