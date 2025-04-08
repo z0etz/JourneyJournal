@@ -284,11 +284,11 @@ class _SaveButtonState extends State<SaveButton> {
           widget.mapController.move(currentPoint, initialZoom);
           print("Frame $frame (Follow): Zoom $initialZoom, Center $currentPoint, Progress: $progress, Actual Zoom: ${widget.mapController.camera.zoom}");
         } else {
-          // Zoom Out: Slow zoom start, fast finish; Fast pan start, slow finish
+          // Zoom Out: Fast zoom start, slow finish; Slow pan start, fast finish
           double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
-          double zoomT = _easeInQuad(t); // Slow start, fast finish
-          double panT = _easeOutQuad(t); // Fast start, slow finish
+          double zoomT = _easeOutQuad(t); // Fast start, slow finish
+          double panT = _easeInQuad(t);   // Slow start, fast finish
           double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
           widget.mapController.move(center, zoom);
