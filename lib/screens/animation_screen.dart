@@ -230,13 +230,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                             markers: currentRoute.routePoints.map((routePoint) {
                               return Marker(
                                 point: routePoint.point,
-                                width: 40.0,
-                                height: 40.0,
+                                width: 25.0,
+                                height: 25.0,
                                 child: Icon(
                                   Icons.circle,
                                   color: currentRoute.routePoints.indexOf(routePoint) == _currentMarkerIndex
-                                      ? Colors.green
+                                      ? Colors.green.withValues(alpha: 0.5)
                                       : Colors.blue,
+                                  size: 15.0,
                                 ),
                               );
                             }).toList(),
@@ -249,7 +250,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 builder: (context, size, child) {
                                   return MarkerLayer(
                                     markers: [
-                                      if (size > 0) // Only show if size > 0
+                                      if (size > 0.0) // Only show if size > 0
                                         Marker(
                                           point: position,
                                           width: size,
