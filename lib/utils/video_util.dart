@@ -272,12 +272,10 @@ class _SaveButtonState extends State<SaveButton> {
           double zoom = widget.fitZoom + (widget.initialZoom - widget.fitZoom) * t;
           LatLng center = _interpolateCenter(fittedCenter!, startPoint, t);
           widget.mapController.move(center, zoom);
-          await widget.mapController.onReady;
           print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t");
         } else if (frame < zoomFrames + followFrames) {
           // Follow: full route animation
           widget.mapController.move(currentPoint, widget.initialZoom);
-          await widget.mapController.onReady;
           print("Frame $frame (Follow): Zoom ${widget.initialZoom}, Center $currentPoint, Progress: $progress");
         } else {
           // Zoom out and pan to fitted center: last 1 second
@@ -286,7 +284,6 @@ class _SaveButtonState extends State<SaveButton> {
           double zoom = widget.initialZoom - (widget.initialZoom - widget.fitZoom) * t;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, t);
           widget.mapController.move(center, zoom);
-          await widget.mapController.onReady;
           print("Frame $frame (Zoom Out): Zoom $zoom, Center $center, t: $t");
         }
       }
