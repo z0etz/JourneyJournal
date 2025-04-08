@@ -26,40 +26,29 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
-  double fitZoom = 10.0; // Store the zoom level after fitting
+  double fitZoom = 10.0;
   LatLng mapPosition = LatLng(59.322, 17.888);
 
   GlobalKey repaintBoundaryKey = GlobalKey();
   int frameCount = 100;
 
-  double _getAspectRatioValue() {
-    switch (_selectedAspectRatio) {
-      case "16:9":
-        return 16 / 9;
-      case "3:2":
-        return 3 / 2;
-      case "2:3":
-        return 2 / 3;
-      case "1:1":
-        return 1.0;
-      case "9:16":
-      default:
-        return 9 / 16;
-    }
-  }
+  final ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(LatLng(0.0, 0.0));
+  final ValueNotifier<double> _markerSizeNotifier = ValueNotifier<double>(0.0); // Starts hidden
 
-  // Duration variable to control animation speed
-  final Duration _animationDuration = const Duration(seconds: 10);
-
-  // Add ValueNotifier to track the animated position
-  final ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(
-      LatLng(0.0, 0.0));
-
-  // Animation controller for smooth movement
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
+  final Duration _animationDuration = const Duration(seconds: 10);
+  double _totalDistance = 0.0;
 
-  double _totalDistance = 0.0; // Total distance of the route
+  double _getAspectRatioValue() {
+    switch (_selectedAspectRatio) {
+      case "16:9": return 16 / 9;
+      case "3:2": return 3 / 2;
+      case "2:3": return 2 / 3;
+      case "1:1": return 1.0;
+      case "9:16": default: return 9 / 16;
+    }
+  }
 
   @override
   void initState() {
@@ -70,7 +59,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
     _animationController = AnimationController(
       vsync: this,
-      duration: _animationDuration, // Duration for the entire movement
+      duration: _animationDuration,
     );
   }
 
@@ -97,10 +86,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _fitMapToRoute() {
-    fitMapToRoute(_mapController,
-        currentRoute.routePoints.map((rp) => rp.point).toList(), isAnimationScreen: true);
+    fitMapToRoute(_mapController, currentRoute.routePoints.map((rp) => rp.point).toList(), isAnimationScreen: true);
     setState(() {
-      fitZoom = _mapController.camera.zoom; // Capture the zoom level after fitting
+      fitZoom = _mapController.camera.zoom;
     });
     print("Map fitted, Fit Zoom: $fitZoom");
     if (currentRoute.routePoints.isNotEmpty) {
@@ -111,9 +99,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _setInitialCirclePosition() {
     if (currentRoute.routePoints.isNotEmpty) {
       LatLng firstPoint = currentRoute.routePoints.first.point;
-      setState(() {
-        _circlePositionNotifier.value = firstPoint;
-      });
+      _circlePositionNotifier.value = firstPoint;
     }
   }
 
@@ -122,6 +108,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _animationController.stop();
       _animationController.reset();
       _circlePositionNotifier.value = currentRoute.routePoints.first.point;
+      _markerSizeNotifier.value = 0.0; // Hide marker
       setState(() {
         _isAnimating = false;
       });
@@ -158,12 +145,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         ),
       );
 
-      // Add listener to update the position of the circle
       _progressAnimation.addListener(() {
         moveCircleAlongPath(_progressAnimation.value, currentRoute, _circlePositionNotifier, _totalDistance);
       });
 
-      // Start the animation from the beginning
       _animationController.reset();
       _animationController.forward();
     }
@@ -179,7 +164,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
             icon: Icon(_isControlsExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down),
             onPressed: () {
               setState(() {
-                _isControlsExpanded = !_isControlsExpanded; // Toggle the expansion
+                _isControlsExpanded = !_isControlsExpanded;
               });
             },
           ),
@@ -189,21 +174,20 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           ? const Center(child: Text("Choose a non-empty route to animate."))
           : Stack(
         children: [
-          // Map with fixed aspect ratio
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
-              padding: const EdgeInsets.all(16.0), // Padding around the map
+              padding: const EdgeInsets.all(16.0),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white, // Background color
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.black, width: 2),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black26,
                       blurRadius: 6,
-                      offset: Offset(0, 4), // Subtle shadow
+                      offset: Offset(0, 4),
                     ),
                   ],
                 ),
@@ -260,20 +244,26 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                           ValueListenableBuilder<LatLng>(
                             valueListenable: _circlePositionNotifier,
                             builder: (context, position, child) {
-                              return MarkerLayer(
-                                markers: [
-                                  Marker(
-                                    point: position,
-                                    width: 40.0,
-                                    height: 40.0,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.green,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              return ValueListenableBuilder<double>(
+                                valueListenable: _markerSizeNotifier,
+                                builder: (context, size, child) {
+                                  return MarkerLayer(
+                                    markers: [
+                                      if (size > 0) // Only show if size > 0
+                                        Marker(
+                                          point: position,
+                                          width: size,
+                                          height: size,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.green,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           ),
@@ -295,13 +285,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).appBarTheme.backgroundColor, // Match AppBar color
+                    color: Theme.of(context).appBarTheme.backgroundColor,
                     borderRadius: BorderRadius.circular(10.0),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Start & End Marker Selection
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -316,8 +305,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                         ],
                       ),
                       SizedBox(height: 10),
-
-                      // Animation Speed Slider
                       Text("Animation Duration"),
                       Slider(
                         value: _animationController.duration!.inSeconds.toDouble(),
@@ -333,8 +320,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       ),
                       SizedBox(height: 10),
                       Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
-
-                      // Toggle for showing route point titles
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -350,8 +335,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                         ],
                       ),
                       SizedBox(height: 10),
-
-                      // Aspect Ratio Selection
                       Text("Aspect Ratio"),
                       DropdownButton<String>(
                         value: _selectedAspectRatio,
@@ -368,8 +351,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                         },
                       ),
                       SizedBox(height: 10),
-
-                      // Save Animation Button
                       Center(
                         child: SaveButton(
                           mapKey: repaintBoundaryKey,
@@ -380,7 +361,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                           mapController: _mapController,
                           currentRoute: currentRoute,
                           initialZoom: zoomLevel,
-                          fitZoom: fitZoom, // Pass the fit zoom
+                          fitZoom: fitZoom,
+                          markerSizeNotifier: _markerSizeNotifier, // Pass size notifier
                         ),
                       ),
                     ],
