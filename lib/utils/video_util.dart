@@ -238,6 +238,9 @@ class _SaveButtonState extends State<SaveButton> {
     print("Initial Zoom: $initialZoom, Fit Zoom: $fitZoom, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
 
+    // Ensure marker starts visible
+    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0); // Set initial size explicitly
+
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress;
       if (frame < zoomFrames) {
@@ -259,7 +262,9 @@ class _SaveButtonState extends State<SaveButton> {
         t = t.clamp(0.0, 1.0);
         double bounceT = _easeOutBack(t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        print("Frame $frame (Zoom In): Marker Size Raw: $bounceT, Final: ${widget.markerSizeNotifier.value}");
+        if (frame <= 5) { // Log early frames
+          print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
+        }
       } else if (frame < zoomFrames + followFrames) {
         widget.markerSizeNotifier.value = markerBaseSize;
       } else {
@@ -267,7 +272,9 @@ class _SaveButtonState extends State<SaveButton> {
         t = t.clamp(0.0, 1.0);
         double bounceT = _easeOutBack(1 - t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        print("Frame $frame (Zoom Out): Marker Size Raw: $bounceT, Final: ${widget.markerSizeNotifier.value}");
+        if (frame >= totalFrames - 5) { // Log late frames
+          print("Frame $frame (Zoom Out): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
+        }
       }
 
       if (routeFits) {
@@ -278,6 +285,7 @@ class _SaveButtonState extends State<SaveButton> {
               isAnimationScreen: true);
           await Future.delayed(Duration(milliseconds: 100));
           fittedCenter = widget.mapController.camera.center;
+          print("Frame 0: Map fitted, Center: $fittedCenter");
         }
 
         if (frame < zoomFrames) {
@@ -288,10 +296,11 @@ class _SaveButtonState extends State<SaveButton> {
           double zoom = fitZoom + (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(fittedCenter!, startPoint, panT);
           widget.mapController.move(center, zoom);
-          print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT, Marker Size: ${widget.markerSizeNotifier.value}");
+          if (frame <= 5) {
+            print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT, Marker Size: ${widget.markerSizeNotifier.value}");
+          }
         } else if (frame < zoomFrames + followFrames) {
           widget.mapController.move(currentPoint, initialZoom);
-          print("Frame $frame (Follow): Zoom $initialZoom, Center $currentPoint, Progress: $progress");
         } else {
           double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
@@ -300,7 +309,6 @@ class _SaveButtonState extends State<SaveButton> {
           double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
           widget.mapController.move(center, zoom);
-          print("Frame $frame (Zoom Out): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT, Marker Size: ${widget.markerSizeNotifier.value}");
         }
       }
 
