@@ -214,10 +214,10 @@ class _SaveButtonState extends State<SaveButton> {
   double _easeInQuad(double t) => t * t;
   double _easeOutQuad(double t) => t * (2 - t);
   double _easeOutBack(double t) {
-    const double c = 2.5;
-    const double b = 1.0;
+    const double c = 5; // Test with 5, 10, 100 later
     double s = t - 1;
-    return 1 + c * math.pow(s, 3) + b * math.pow(s, 2);
+    double bounce = c * s * s * (s + 1);
+    return 0.1 + 0.9 * t + bounce;
   }
 
   Future<void> _saveAnimation() async {
@@ -226,7 +226,7 @@ class _SaveButtonState extends State<SaveButton> {
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
-    const int zoomFrames = 60;
+    const int zoomFrames = 45; //Frames for zoom at star and end (30 = 1sec)
     final int followFrames = totalFrames - 2 * zoomFrames;
     LatLng? fittedCenter;
     final LatLng startPoint = widget.currentRoute.routePoints.first.point;
@@ -238,8 +238,7 @@ class _SaveButtonState extends State<SaveButton> {
     print("Initial Zoom: $initialZoom, Fit Zoom: $fitZoom, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
 
-    // Ensure marker starts visible
-    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0); // Set initial size explicitly
+    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0); // ~2.5
 
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress;
@@ -256,13 +255,12 @@ class _SaveButtonState extends State<SaveButton> {
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
-      // Marker animation
       if (frame < zoomFrames) {
         double t = frame / (zoomFrames - 1).toDouble();
         t = t.clamp(0.0, 1.0);
         double bounceT = _easeOutBack(t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        if (frame <= 5) { // Log early frames
+        if (frame <= 5 || frame == 30) {
           print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
         }
       } else if (frame < zoomFrames + followFrames) {
@@ -272,7 +270,7 @@ class _SaveButtonState extends State<SaveButton> {
         t = t.clamp(0.0, 1.0);
         double bounceT = _easeOutBack(1 - t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        if (frame >= totalFrames - 5) { // Log late frames
+        if (frame >= totalFrames - 5) {
           print("Frame $frame (Zoom Out): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
         }
       }

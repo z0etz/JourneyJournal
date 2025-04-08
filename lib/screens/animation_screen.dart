@@ -39,6 +39,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   late Animation<double> _progressAnimation;
   final Duration _animationDuration = const Duration(seconds: 10);
   double _totalDistance = 0.0;
+  static const double markerBaseSize = 25.0;
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -145,12 +146,19 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         ),
       );
 
+      _markerSizeNotifier.value = markerBaseSize; // Show marker during preview
       _progressAnimation.addListener(() {
         moveCircleAlongPath(_progressAnimation.value, currentRoute, _circlePositionNotifier, _totalDistance);
       });
 
       _animationController.reset();
-      _animationController.forward();
+      _animationController.forward().then((_) {
+        // Reset marker size when preview ends
+        _markerSizeNotifier.value = 0.0;
+        setState(() {
+          _isAnimating = false;
+        });
+      });
     }
   }
 
