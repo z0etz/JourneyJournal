@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -284,11 +285,11 @@ class _SaveButtonState extends State<SaveButton> {
           widget.mapController.move(currentPoint, initialZoom);
           print("Frame $frame (Follow): Zoom $initialZoom, Center $currentPoint, Progress: $progress, Actual Zoom: ${widget.mapController.camera.zoom}");
         } else {
-          // Zoom Out: Fast zoom start, slow finish; Slow pan start, fast finish
+          // Zoom Out: Fast zoom start, slow finish; Slow pan start, fast middle, slow finish
           double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
           double zoomT = _easeOutQuad(t); // Fast start, slow finish
-          double panT = _easeInQuad(t);   // Slow start, fast finish
+          double panT = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2; // Ease-in-out quad
           double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
           widget.mapController.move(center, zoom);
