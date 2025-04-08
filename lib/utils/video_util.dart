@@ -210,6 +210,12 @@ class _SaveButtonState extends State<SaveButton> {
     }
   }
 
+  LatLng _interpolateCenter(LatLng start, LatLng end, double t) {
+    double lat = start.latitude + (end.latitude - start.latitude) * t;
+    double lng = start.longitude + (end.longitude - start.longitude) * t;
+    return LatLng(lat, lng);
+  }
+
   Future<void> _saveAnimation() async {
     setState(() => _isSaving = true);
 
@@ -218,16 +224,29 @@ class _SaveButtonState extends State<SaveButton> {
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
     const int zoomFrames = 30; // 1 second at 30fps
     final int followFrames = totalFrames - 2 * zoomFrames;
-    LatLng? fittedCenter; // Store the center after fitting
+    LatLng? fittedCenter;
+    final LatLng startPoint = widget.currentRoute.routePoints.first.point;
+    final LatLng endPoint = widget.currentRoute.routePoints.last.point;
 
-    // Log initial state
     print("Initial Zoom: ${widget.initialZoom}, Fit Zoom: ${widget.fitZoom}, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
+    print("Start Point: $startPoint, End Point: $endPoint");
 
     for (int frame = 0; frame < totalFrames; frame++) {
-      double progress = frame / totalFrames.clamp(1, double.infinity);
+      double progress;
+      if (frame < zoomFrames) {
+        progress = 0.0; // Marker stays at start
+      } else if (frame < zoomFrames + followFrames) {
+        // Full route animation during follow phase
+        double followT = (frame - zoomFrames) / followFrames.toDouble();
+        progress = followT.clamp(0.0, 1.0);
+      } else {
+        progress = 1.0; // Marker stays at end
+      }
+
       widget.animationController.value = progress;
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
+      LatLng currentPoint = widget.circlePositionNotifier.value;
 
       if (routeFits) {
         // Static view: keep current zoom and center
@@ -247,21 +266,28 @@ class _SaveButtonState extends State<SaveButton> {
         }
 
         if (frame < zoomFrames) {
-          // Zoom in: 0 to 1 second, keep fitted center
-          double t = frame / zoomFrames.toDouble();
+          // Zoom in and pan to start point: 0 to 1 second
+          double t = frame / (zoomFrames - 1).toDouble();
+          t = t.clamp(0.0, 1.0);
           double zoom = widget.fitZoom + (widget.initialZoom - widget.fitZoom) * t;
-          widget.mapController.move(fittedCenter!, zoom);
-          print("Frame $frame (Zoom In): Zoom $zoom, Center $fittedCenter");
+          LatLng center = _interpolateCenter(fittedCenter!, startPoint, t);
+          widget.mapController.move(center, zoom);
+          await widget.mapController.onReady;
+          print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t");
         } else if (frame < zoomFrames + followFrames) {
-          // Follow: remaining time minus last second, center on marker
+          // Follow: full route animation
           widget.mapController.move(currentPoint, widget.initialZoom);
-          print("Frame $frame (Follow): Zoom ${widget.initialZoom}, Center $currentPoint");
+          await widget.mapController.onReady;
+          print("Frame $frame (Follow): Zoom ${widget.initialZoom}, Center $currentPoint, Progress: $progress");
         } else {
-          // Zoom out: last 1 second, return to fitted center
-          double t = (frame - (zoomFrames + followFrames)) / zoomFrames.toDouble();
+          // Zoom out and pan to fitted center: last 1 second
+          double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
+          t = t.clamp(0.0, 1.0);
           double zoom = widget.initialZoom - (widget.initialZoom - widget.fitZoom) * t;
-          widget.mapController.move(fittedCenter!, zoom);
-          print("Frame $frame (Zoom Out): Zoom $zoom, Center $fittedCenter");
+          LatLng center = _interpolateCenter(endPoint, fittedCenter!, t);
+          widget.mapController.move(center, zoom);
+          await widget.mapController.onReady;
+          print("Frame $frame (Zoom Out): Zoom $zoom, Center $center, t: $t");
         }
       }
 
