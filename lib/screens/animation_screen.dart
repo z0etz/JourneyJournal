@@ -256,7 +256,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                           height: size,
                                           child: Container(
                                             decoration: BoxDecoration(
-                                              color: Colors.green,
+                                              color: Colors.orange,
                                               shape: BoxShape.circle,
                                             ),
                                           ),
@@ -308,8 +308,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       Text("Animation Duration"),
                       Slider(
                         value: _animationController.duration!.inSeconds.toDouble(),
-                        min: 3,
-                        max: 22,
+                        min: 5,
+                        max: 24,
                         divisions: 19,
                         label: "${_animationController.duration!.inSeconds}s",
                         onChanged: (value) {

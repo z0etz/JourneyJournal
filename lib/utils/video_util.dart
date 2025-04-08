@@ -214,7 +214,7 @@ class _SaveButtonState extends State<SaveButton> {
   double _easeInQuad(double t) => t * t;
   double _easeOutQuad(double t) => t * (2 - t);
   double _easeOutBack(double t) {
-    const double c = 10;
+    const double c = 100;
     const double b = 1.0;
     double s = t - 1;
     return 1 + c * math.pow(s, 3) + b * math.pow(s, 2);
@@ -226,14 +226,14 @@ class _SaveButtonState extends State<SaveButton> {
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
-    const int zoomFrames = 30; // 1 second at 30fps
+    const int zoomFrames = 60; // 2 seconds at 30fps
     final int followFrames = totalFrames - 2 * zoomFrames;
     LatLng? fittedCenter;
     final LatLng startPoint = widget.currentRoute.routePoints.first.point;
     final LatLng endPoint = widget.currentRoute.routePoints.last.point;
     final double fitZoom = widget.fitZoom;
     final double initialZoom = widget.initialZoom;
-    const double markerBaseSize = 25.0;
+    const double markerBaseSize = 30.0;
 
     print("Initial Zoom: $initialZoom, Fit Zoom: $fitZoom, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
@@ -253,21 +253,21 @@ class _SaveButtonState extends State<SaveButton> {
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
-      // Marker animation
+      // Marker animation without delay
       if (frame < zoomFrames) {
-        // Bounce in during Zoom In
+        // Zoom In: Start immediately
         double t = frame / (zoomFrames - 1).toDouble();
         t = t.clamp(0.0, 1.0);
         double bounceT = _easeOutBack(t);
-        widget.markerSizeNotifier.value = markerBaseSize * bounceT; // 0 -> ~48 -> 40
+        widget.markerSizeNotifier.value = markerBaseSize * bounceT;
       } else if (frame < zoomFrames + followFrames) {
         // Steady size during Follow
         widget.markerSizeNotifier.value = markerBaseSize;
       } else {
-        // Bounce out during Zoom Out
+        // Zoom Out: Disappear at the very end
         double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
         t = t.clamp(0.0, 1.0);
-        double bounceT = _easeOutBack(1 - t); // Reverse: 40 -> ~48 -> 0
+        double bounceT = _easeOutBack(1 - t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
       }
 
