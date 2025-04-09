@@ -121,7 +121,28 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _toggleAnimation() {
-    if (_isAnimating) {
+    if (_isSavingNotifier.value) {
+      // Cancel save when button is pressed during saving
+      print("Cancelling save via play/stop button");
+      _isSavingNotifier.value = false; // Signal cancellation
+      _animationController.stop();
+      _animationController.reset();
+      _circlePositionNotifier.value = currentRoute.routePoints.first.point;
+      _markerSizeNotifier.value = 0.0;
+      if (currentRoute.routePoints.length > 1) {
+        LatLng firstPoint = currentRoute.routePoints.first.point;
+        LatLng secondPoint = currentRoute.routePoints[1].point;
+        _directionNotifier.value = atan2(
+          secondPoint.longitude - firstPoint.longitude,
+          secondPoint.latitude - firstPoint.latitude,
+        );
+      } else {
+        _directionNotifier.value = 0.0;
+      }
+      setState(() {
+        _isAnimating = false;
+      });
+    } else if (_isAnimating) {
       _animationController.stop();
       _animationController.reset();
       _circlePositionNotifier.value = currentRoute.routePoints.first.point;
@@ -488,10 +509,19 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
               ),
           ],
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _toggleAnimation,
-          child: Icon(_isAnimating ? Icons.stop : Icons.play_arrow),
-        ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: _toggleAnimation,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _isSavingNotifier,
+              builder: (context, isSaving, child) {
+                return Icon(isSaving
+                    ? Icons.stop // Show stop icon during save
+                    : _isAnimating
+                    ? Icons.stop
+                    : Icons.play_arrow);
+              },
+            ),
+          )
       ),
     );
   }
