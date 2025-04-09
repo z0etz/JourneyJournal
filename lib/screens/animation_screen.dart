@@ -19,7 +19,7 @@ class AnimationScreen extends StatefulWidget {
 class _AnimationScreenState extends State<AnimationScreen> with TickerProviderStateMixin {
   late RouteModel currentRoute;
   bool _isAnimating = false;
-  bool _isSaving = false;
+  final ValueNotifier<bool> _isSavingNotifier = ValueNotifier<bool>(false); // Shared state
   final int _currentMarkerIndex = 0;
   bool _isControlsExpanded = false;
   int _startMarkerIndex = 0;
@@ -47,11 +47,17 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
-      case "16:9": return 16 / 9;
-      case "3:2": return 3 / 2;
-      case "2:3": return 2 / 3;
-      case "1:1": return 1.0;
-      case "9:16": default: return 9 / 16;
+      case "16:9":
+        return 16 / 9;
+      case "3:2":
+        return 3 / 2;
+      case "2:3":
+        return 2 / 3;
+      case "1:1":
+        return 1.0;
+      case "9:16":
+      default:
+        return 9 / 16;
     }
   }
 
@@ -200,9 +206,19 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   @override
+  void dispose() {
+    _isSavingNotifier.dispose();
+    _circlePositionNotifier.dispose();
+    _markerSizeNotifier.dispose();
+    _directionNotifier.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_isSaving,
+      canPop: !_isSavingNotifier.value,
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Route Animation"),
@@ -250,14 +266,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                             initialCenter: mapPosition,
                             initialZoom: zoomLevel,
                             onPositionChanged: (position, hasGesture) {
-                              if (!_isSaving) {
+                              if (!_isSavingNotifier.value) {
                                 setState(() {
                                   zoomLevel = position.zoom;
                                   mapPosition = position.center;
                                 });
                               }
                             },
-                            interactionOptions: _isSaving
+                            interactionOptions: _isSavingNotifier.value
                                 ? const InteractionOptions(flags: InteractiveFlag.none)
                                 : const InteractionOptions(
                               flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
@@ -350,7 +366,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                           borderRadius: BorderRadius.circular(10.0),
                         ),
                         child: AbsorbPointer(
-                          absorbing: _isSaving,
+                          absorbing: _isSavingNotifier.value,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -358,11 +374,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   ElevatedButton(
-                                    onPressed: _isSaving ? null : () => _selectStartPoint(),
+                                    onPressed: _isSavingNotifier.value ? null : () => _selectStartPoint(),
                                     child: const Text("Set Start Point"),
                                   ),
                                   ElevatedButton(
-                                    onPressed: _isSaving ? null : () => _selectEndPoint(),
+                                    onPressed: _isSavingNotifier.value ? null : () => _selectEndPoint(),
                                     child: const Text("Set End Point"),
                                   ),
                                 ],
@@ -375,7 +391,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 max: 24,
                                 divisions: 19,
                                 label: "${_animationController.duration!.inSeconds}s",
-                                onChanged: _isSaving
+                                onChanged: _isSavingNotifier.value
                                     ? null
                                     : (value) {
                                   setState(() {
@@ -391,7 +407,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   const Text("Show Route Point Titles"),
                                   Switch(
                                     value: _showRouteTitles,
-                                    onChanged: _isSaving
+                                    onChanged: _isSavingNotifier.value
                                         ? null
                                         : (value) {
                                       setState(() {
@@ -411,7 +427,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     child: Text(ratio),
                                   );
                                 }).toList(),
-                                onChanged: _isSaving
+                                onChanged: _isSavingNotifier.value
                                     ? null
                                     : (value) {
                                   setState(() {
@@ -435,21 +451,22 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   directionNotifier: _directionNotifier,
                                   onSaveStart: () {
                                     print("Save started in AnimationScreen");
-                                    setState(() => _isSaving = true);
+                                    _isSavingNotifier.value = true;
                                     widget.onSavingChanged?.call(true);
                                   },
                                   onSaveComplete: () {
                                     print("Save completed in AnimationScreen");
-                                    setState(() => _isSaving = false);
+                                    _isSavingNotifier.value = false;
                                     widget.onSavingChanged?.call(false);
                                   },
+                                  isSavingNotifier: _isSavingNotifier,
                                 ),
                               ),
                             ],
                           ),
                         ),
                       ),
-                      if (_isSaving)
+                      if (_isSavingNotifier.value)
                         Positioned.fill(
                           child: Container(
                             decoration: BoxDecoration(

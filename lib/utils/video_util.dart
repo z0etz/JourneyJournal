@@ -85,8 +85,9 @@ class SaveButton extends StatefulWidget {
   final ValueNotifier<double> directionNotifier;
   final VoidCallback onSaveStart;
   final VoidCallback onSaveComplete;
+  final ValueNotifier<bool> isSavingNotifier; // Added parameter
 
-  SaveButton({
+  const SaveButton({ // Updated constructor
     required this.mapKey,
     required this.frameCount,
     required this.animationController,
@@ -100,6 +101,8 @@ class SaveButton extends StatefulWidget {
     required this.directionNotifier,
     required this.onSaveStart,
     required this.onSaveComplete,
+    required this.isSavingNotifier,
+    super.key,
   });
 
   @override
@@ -107,7 +110,6 @@ class SaveButton extends StatefulWidget {
 }
 
 class _SaveButtonState extends State<SaveButton> {
-  bool _isSaving = false;
   late double _totalDistance;
 
   @override
@@ -119,12 +121,18 @@ class _SaveButtonState extends State<SaveButton> {
 
   Size _getPixelDimensions() {
     switch (widget.aspectRatio) {
-      case "9:16": return Size(576, 1024);
-      case "16:9": return Size(1024, 576);
-      case "3:2": return Size(768, 512);
-      case "2:3": return Size(512, 768);
-      case "1:1": return Size(512, 512);
-      default: return Size(576, 1024);
+      case "9:16":
+        return Size(576, 1024);
+      case "16:9":
+        return Size(1024, 576);
+      case "3:2":
+        return Size(768, 512);
+      case "2:3":
+        return Size(512, 768);
+      case "1:1":
+        return Size(512, 512);
+      default:
+        return Size(576, 1024);
     }
   }
 
@@ -200,7 +208,9 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   double _easeInQuad(double t) => t * t;
+
   double _easeOutQuad(double t) => t * (2 - t);
+
   double _easeOutBack(double t) {
     const double c = 5;
     double s = t - 1;
@@ -209,11 +219,11 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   Future<void> _saveAnimation() async {
+    if (widget.isSavingNotifier.value) return; // Prevent re-entry
+
     print("Save animation started");
-    setState(() {
-      _isSaving = true;
-      print("SaveButton _isSaving set to true");
-    });
+    widget.isSavingNotifier.value = true; // Update notifier instead of local state
+    print("SaveButton isSavingNotifier set to true");
     widget.onSaveStart();
 
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
@@ -236,8 +246,10 @@ class _SaveButtonState extends State<SaveButton> {
         : 0.0;
     double finalDirection = widget.currentRoute.routePoints.length > 1
         ? atan2(
-      endPoint.longitude - widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.longitude,
-      endPoint.latitude - widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.latitude,
+      endPoint.longitude -
+          widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.longitude,
+      endPoint.latitude -
+          widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.latitude,
     )
         : 0.0;
 
@@ -262,7 +274,6 @@ class _SaveButtonState extends State<SaveButton> {
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
-      // Update direction during follow phase
       if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
         double deltaLat = currentPoint.latitude - lastPosition.latitude;
         double deltaLng = currentPoint.longitude - lastPosition.longitude;
@@ -272,7 +283,7 @@ class _SaveButtonState extends State<SaveButton> {
           currentPoint.latitude,
           currentPoint.longitude,
         );
-        if (distanceMoved > 1.0) { // Only update if significant movement
+        if (distanceMoved > 1.0) {
           widget.directionNotifier.value = atan2(deltaLng, deltaLat);
         }
       }
@@ -290,7 +301,8 @@ class _SaveButtonState extends State<SaveButton> {
 
       if (!routeFits) {
         if (frame == 0) {
-          fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
+          fitMapToRoute(widget.mapController,
+              widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
               isAnimationScreen: true);
           await Future.delayed(const Duration(milliseconds: 100));
           fittedCenter = widget.mapController.camera.center;
@@ -347,23 +359,45 @@ class _SaveButtonState extends State<SaveButton> {
 
       final frameDir = await _getTempFrameDir();
       await frameDir.delete(recursive: true);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Video saved at: $videoPath')));
-    }
 
-    print("Save animation completed");
-    setState(() {
-      _isSaving = false;
-      print("SaveButton _isSaving set to false");
-    });
-    widget.onSaveComplete();
+      // Reset UI using notifier
+      widget.isSavingNotifier.value = false;
+      print("SaveButton isSavingNotifier set to false");
+      widget.onSaveComplete();
+
+      // Show snackbar only if still mounted
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Video saved at: $videoPath')));
+      } else {
+        print("SaveButton unmounted, skipping snackbar");
+      }
+    } else {
+      // Reset UI even if no frames were saved
+      widget.isSavingNotifier.value = false;
+      print("SaveButton isSavingNotifier set to false (no frames)");
+      widget.onSaveComplete();
+      print("No frames captured, save completed without video");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    print("SaveButton build, _isSaving: $_isSaving");
-    return ElevatedButton(
-      onPressed: _isSaving ? null : _saveAnimation,
-      child: _isSaving ? CircularProgressIndicator() : Text("Save Animation"),
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.isSavingNotifier,
+      builder: (context, isSaving, child) {
+        print("SaveButton build, isSaving: $isSaving");
+        return ElevatedButton(
+          onPressed: isSaving ? null : _saveAnimation,
+          child: isSaving
+              ? const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.0),
+          )
+              : const Text("Save Animation"),
+        );
+      },
     );
   }
 }
