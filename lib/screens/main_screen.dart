@@ -64,8 +64,8 @@ class _MainScreenState extends State<MainScreen> {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3), // Fixed: color in decoration
-                  boxShadow: [
+                  color: Colors.grey.withOpacity(0.3), // Moved color here
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 4.0,
