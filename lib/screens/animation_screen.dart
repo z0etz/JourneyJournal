@@ -280,7 +280,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                               child: Transform.rotate(
                                                 angle: direction,
                                                 child: Icon(
-                                                  Icons.arrow_upward, // Change to arrow
+                                                  Icons.toys, // Change to arrow
                                                   color: Colors.orange,
                                                   size: size,
                                                 ),
