@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:math' as math;
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -105,6 +105,7 @@ class SaveButton extends StatefulWidget {
 class _SaveButtonState extends State<SaveButton> {
   bool _isSaving = false;
   late double _totalDistance;
+  final ValueNotifier<double> _directionNotifier = ValueNotifier<double>(0.0); // Add for arrow direction
 
   @override
   void initState() {
@@ -214,7 +215,7 @@ class _SaveButtonState extends State<SaveButton> {
   double _easeInQuad(double t) => t * t;
   double _easeOutQuad(double t) => t * (2 - t);
   double _easeOutBack(double t) {
-    const double c = 5; // Test with 5, 10, 100 later
+    const double c = 5;
     double s = t - 1;
     double bounce = c * s * s * (s + 1);
     return 0.1 + 0.9 * t + bounce;
@@ -238,7 +239,8 @@ class _SaveButtonState extends State<SaveButton> {
     print("Initial Zoom: $initialZoom, Fit Zoom: $fitZoom, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
 
-    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0); // ~2.5
+    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
+    LatLng? lastPosition; // Track previous position for direction
 
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress;
@@ -254,6 +256,13 @@ class _SaveButtonState extends State<SaveButton> {
       widget.animationController.value = progress;
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       LatLng currentPoint = widget.circlePositionNotifier.value;
+
+      if (lastPosition != null) {
+        double deltaLat = currentPoint.latitude - lastPosition!.latitude;
+        double deltaLng = currentPoint.longitude - lastPosition!.longitude;
+        _directionNotifier.value = atan2(deltaLng, deltaLat); // Calculate direction
+      }
+      lastPosition = currentPoint;
 
       if (frame < zoomFrames) {
         double t = frame / (zoomFrames - 1).toDouble();
@@ -303,7 +312,7 @@ class _SaveButtonState extends State<SaveButton> {
           double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
           double zoomT = _easeOutQuad(t);
-          double panT = t < 0.5 ? 2 * t * t : 1 - math.pow(-2 * t + 2, 2) / 2;
+          double panT = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2;
           double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
           widget.mapController.move(center, zoom);

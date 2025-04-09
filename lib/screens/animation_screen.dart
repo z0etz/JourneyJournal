@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -34,6 +35,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   final ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(LatLng(0.0, 0.0));
   final ValueNotifier<double> _markerSizeNotifier = ValueNotifier<double>(0.0); // Starts hidden
+  final ValueNotifier<double> _directionNotifier = ValueNotifier<double>(0.0); // Add for arrow direction
 
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
@@ -110,6 +112,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _animationController.reset();
       _circlePositionNotifier.value = currentRoute.routePoints.first.point;
       _markerSizeNotifier.value = 0.0; // Hide marker
+      _directionNotifier.value = 0.0; // Reset direction
       setState(() {
         _isAnimating = false;
       });
@@ -147,14 +150,22 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       );
 
       _markerSizeNotifier.value = markerBaseSize; // Show marker during preview
+      LatLng? lastPosition; // Track previous position for direction
       _progressAnimation.addListener(() {
         moveCircleAlongPath(_progressAnimation.value, currentRoute, _circlePositionNotifier, _totalDistance);
+        LatLng currentPosition = _circlePositionNotifier.value;
+        if (lastPosition != null) {
+          double deltaLat = currentPosition.latitude - lastPosition!.latitude;
+          double deltaLng = currentPosition.longitude - lastPosition!.longitude;
+          _directionNotifier.value = atan2(deltaLng, deltaLat); // Calculate direction
+        }
+        lastPosition = currentPosition;
       });
 
       _animationController.reset();
       _animationController.forward().then((_) {
-        // Reset marker size when preview ends
-        _markerSizeNotifier.value = 0.0;
+        _markerSizeNotifier.value = 0.0; // Reset marker size when preview ends
+        _directionNotifier.value = 0.0; // Reset direction
         setState(() {
           _isAnimating = false;
         });
@@ -256,21 +267,28 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               return ValueListenableBuilder<double>(
                                 valueListenable: _markerSizeNotifier,
                                 builder: (context, size, child) {
-                                  return MarkerLayer(
-                                    markers: [
-                                      if (size > 0.0) // Only show if size > 0
-                                        Marker(
-                                          point: position,
-                                          width: size,
-                                          height: size,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange,
-                                              shape: BoxShape.circle,
+                                  return ValueListenableBuilder<double>(
+                                    valueListenable: _directionNotifier,
+                                    builder: (context, direction, child) {
+                                      return MarkerLayer(
+                                        markers: [
+                                          if (size > 0.0)
+                                            Marker(
+                                              point: position,
+                                              width: size,
+                                              height: size,
+                                              child: Transform.rotate(
+                                                angle: direction,
+                                                child: Icon(
+                                                  Icons.arrow_upward, // Change to arrow
+                                                  color: Colors.orange,
+                                                  size: size,
+                                                ),
+                                              ),
                                             ),
-                                          ),
-                                        ),
-                                    ],
+                                        ],
+                                      );
+                                    },
                                   );
                                 },
                               );
@@ -371,7 +389,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                           currentRoute: currentRoute,
                           initialZoom: zoomLevel,
                           fitZoom: fitZoom,
-                          markerSizeNotifier: _markerSizeNotifier, // Pass size notifier
+                          markerSizeNotifier: _markerSizeNotifier,
                         ),
                       ),
                     ],
