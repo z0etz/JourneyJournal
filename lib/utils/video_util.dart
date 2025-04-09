@@ -255,30 +255,39 @@ class _SaveButtonState extends State<SaveButton> {
         : 0.0;
 
     widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
-    widget.directionNotifier.value = initialDirection; // Set initial direction
+    widget.directionNotifier.value = initialDirection;
     LatLng? lastPosition;
 
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress;
       if (frame < zoomFrames) {
         progress = 0.0;
-        widget.directionNotifier.value = initialDirection; // Ensure bounce-in direction
+        widget.directionNotifier.value = initialDirection; // Bounce-in
       } else if (frame < zoomFrames + followFrames) {
         double followT = (frame - zoomFrames) / followFrames.toDouble();
         progress = followT.clamp(0.0, 1.0);
       } else {
         progress = 1.0;
-        widget.directionNotifier.value = finalDirection; // Ensure bounce-out direction
+        widget.directionNotifier.value = finalDirection; // Bounce-out
       }
 
       widget.animationController.value = progress;
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
+      // Only update direction dynamically if there's significant movement
       if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
         double deltaLat = currentPoint.latitude - lastPosition!.latitude;
         double deltaLng = currentPoint.longitude - lastPosition!.longitude;
-        widget.directionNotifier.value = atan2(deltaLng, deltaLat);
+        double distanceMoved = Geolocator.distanceBetween(
+          lastPosition!.latitude,
+          lastPosition!.longitude,
+          currentPoint.latitude,
+          currentPoint.longitude,
+        );
+        if (distanceMoved > 1.0) { // Threshold to avoid jitter at tiny movements
+          widget.directionNotifier.value = atan2(deltaLng, deltaLat);
+        }
       }
       lastPosition = currentPoint;
 
@@ -287,11 +296,14 @@ class _SaveButtonState extends State<SaveButton> {
         t = t.clamp(0.0, 1.0);
         double bounceT = _easeOutBack(t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        if (frame <= 5 || frame == 30) {
+        if (frame <= 5 || frame == zoomFrames - 1) {
           print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}, Direction: ${widget.directionNotifier.value}");
         }
       } else if (frame < zoomFrames + followFrames) {
         widget.markerSizeNotifier.value = markerBaseSize;
+        if (frame == zoomFrames || frame == zoomFrames + 1) {
+          print("Frame $frame (Follow Start): Progress: $progress, Position: $currentPoint, Direction: ${widget.directionNotifier.value}");
+        }
       } else {
         double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
         t = t.clamp(0.0, 1.0);
