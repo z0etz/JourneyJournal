@@ -8,8 +8,9 @@ import 'package:journeyjournal/utils/video_util.dart';
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
+  final Function(bool)? onSavingChanged;
 
-  const AnimationScreen({super.key, this.initialRoute});
+  const AnimationScreen({super.key, this.initialRoute, this.onSavingChanged});
 
   @override
   State<AnimationScreen> createState() => _AnimationScreenState();
@@ -18,6 +19,7 @@ class AnimationScreen extends StatefulWidget {
 class _AnimationScreenState extends State<AnimationScreen> with TickerProviderStateMixin {
   late RouteModel currentRoute;
   bool _isAnimating = false;
+  bool _isSaving = false;
   final int _currentMarkerIndex = 0;
   bool _isControlsExpanded = false;
   int _startMarkerIndex = 0;
@@ -66,7 +68,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     );
   }
 
-  // Load the route or create a new one
   Future<void> _loadRoute() async {
     if (widget.initialRoute != null) {
       currentRoute = widget.initialRoute!;
@@ -200,234 +201,280 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Route Animation"),
-        actions: [
-          IconButton(
-            icon: Icon(_isControlsExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down),
-            onPressed: () {
-              setState(() {
-                _isControlsExpanded = !_isControlsExpanded;
-              });
-            },
-          ),
-        ],
-      ),
-      body: currentRoute.routePoints.isEmpty
-          ? const Center(child: Text("Choose a non-empty route to animate."))
-          : Stack(
-        children: [
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.black, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 6,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: RepaintBoundary(
-                  key: repaintBoundaryKey,
-                  child: AspectRatio(
-                    aspectRatio: _getAspectRatioValue(),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: mapPosition,
-                          initialZoom: zoomLevel,
-                          onPositionChanged: (position, hasGesture) {
-                            setState(() {
-                              zoomLevel = position.zoom;
-                              mapPosition = position.center;
-                            });
-                          },
-                          interactionOptions: const InteractionOptions(
-                            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-                          ),
-                        ),
-                        children: [
-                          TileLayer(
-                            urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                          ),
-                          if (currentRoute.routePoints.isNotEmpty)
-                            PolylineLayer(
-                              polylines: [
-                                Polyline(
-                                  points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
-                                  color: Colors.blue,
-                                  strokeWidth: 4.0,
-                                ),
-                              ],
+    return PopScope(
+      canPop: !_isSaving,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Route Animation"),
+          actions: [
+            IconButton(
+              icon: Icon(_isControlsExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down),
+              onPressed: () {
+                setState(() {
+                  _isControlsExpanded = !_isControlsExpanded;
+                });
+              },
+            ),
+          ],
+        ),
+        body: currentRoute.routePoints.isEmpty
+            ? const Center(child: Text("Choose a non-empty route to animate."))
+            : Stack(
+          children: [
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 6,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: RepaintBoundary(
+                    key: repaintBoundaryKey,
+                    child: AspectRatio(
+                      aspectRatio: _getAspectRatioValue(),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: FlutterMap(
+                          mapController: _mapController,
+                          options: MapOptions(
+                            initialCenter: mapPosition,
+                            initialZoom: zoomLevel,
+                            onPositionChanged: (position, hasGesture) {
+                              if (!_isSaving) {
+                                setState(() {
+                                  zoomLevel = position.zoom;
+                                  mapPosition = position.center;
+                                });
+                              }
+                            },
+                            interactionOptions: _isSaving
+                                ? const InteractionOptions(flags: InteractiveFlag.none)
+                                : const InteractionOptions(
+                              flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
                             ),
-                          MarkerLayer(
-                            markers: currentRoute.routePoints.map((routePoint) {
-                              return Marker(
-                                point: routePoint.point,
-                                width: 25.0,
-                                height: 25.0,
-                                child: Icon(
-                                  Icons.circle,
-                                  color: currentRoute.routePoints.indexOf(routePoint) == _currentMarkerIndex
-                                      ? Colors.green.withValues(alpha: 0.5)
-                                      : Colors.blue,
-                                  size: 15.0,
-                                ),
-                              );
-                            }).toList(),
                           ),
-                          ValueListenableBuilder<LatLng>(
-                            valueListenable: _circlePositionNotifier,
-                            builder: (context, position, child) {
-                              return ValueListenableBuilder<double>(
-                                valueListenable: _markerSizeNotifier,
-                                builder: (context, size, child) {
-                                  return ValueListenableBuilder<double>(
-                                    valueListenable: _directionNotifier,
-                                    builder: (context, direction, child) {
-                                      return MarkerLayer(
-                                        markers: [
-                                          if (size > 0.0)
-                                            Marker(
-                                              point: position,
-                                              width: size,
-                                              height: size,
-                                              child: Transform.rotate(
-                                                angle: direction,
-                                                child: Icon(
-                                                  Icons.navigation,
-                                                  color: Colors.orange,
-                                                  size: size,
+                          children: [
+                            TileLayer(
+                              urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                            ),
+                            if (currentRoute.routePoints.isNotEmpty)
+                              PolylineLayer(
+                                polylines: [
+                                  Polyline(
+                                    points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
+                                    color: Colors.blue,
+                                    strokeWidth: 4.0,
+                                  ),
+                                ],
+                              ),
+                            MarkerLayer(
+                              markers: currentRoute.routePoints.map((routePoint) {
+                                return Marker(
+                                  point: routePoint.point,
+                                  width: 25.0,
+                                  height: 25.0,
+                                  child: Icon(
+                                    Icons.circle,
+                                    color: currentRoute.routePoints.indexOf(routePoint) == _currentMarkerIndex
+                                        ? Colors.green.withValues(alpha: 0.5)
+                                        : Colors.blue,
+                                    size: 15.0,
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            ValueListenableBuilder<LatLng>(
+                              valueListenable: _circlePositionNotifier,
+                              builder: (context, position, child) {
+                                return ValueListenableBuilder<double>(
+                                  valueListenable: _markerSizeNotifier,
+                                  builder: (context, size, child) {
+                                    return ValueListenableBuilder<double>(
+                                      valueListenable: _directionNotifier,
+                                      builder: (context, direction, child) {
+                                        return MarkerLayer(
+                                          markers: [
+                                            if (size > 0.0)
+                                              Marker(
+                                                point: position,
+                                                width: size,
+                                                height: size,
+                                                child: Transform.rotate(
+                                                  angle: direction,
+                                                  child: Icon(
+                                                    Icons.navigation,
+                                                    color: Colors.orange,
+                                                    size: size,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ],
+                                          ],
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (_isControlsExpanded)
-            Positioned(
-              top: 0,
-              left: 10.0,
-              right: 10.0,
-              child: Material(
-                color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).appBarTheme.backgroundColor,
-                    borderRadius: BorderRadius.circular(10.0),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            if (_isControlsExpanded)
+              Positioned(
+                top: 0,
+                left: 10.0,
+                right: 10.0,
+                child: Material(
+                  color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
+                  child: Stack(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          ElevatedButton(
-                            onPressed: () => _selectStartPoint(),
-                            child: Text("Set Start Point"),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).appBarTheme.backgroundColor,
+                          borderRadius: BorderRadius.circular(10.0),
+                        ),
+                        child: AbsorbPointer(
+                          absorbing: _isSaving,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  ElevatedButton(
+                                    onPressed: _isSaving ? null : () => _selectStartPoint(),
+                                    child: const Text("Set Start Point"),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: _isSaving ? null : () => _selectEndPoint(),
+                                    child: const Text("Set End Point"),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              const Text("Animation Duration"),
+                              Slider(
+                                value: _animationController.duration!.inSeconds.toDouble(),
+                                min: 5,
+                                max: 24,
+                                divisions: 19,
+                                label: "${_animationController.duration!.inSeconds}s",
+                                onChanged: _isSaving
+                                    ? null
+                                    : (value) {
+                                  setState(() {
+                                    _animationController.duration = Duration(seconds: value.toInt());
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text("Show Route Point Titles"),
+                                  Switch(
+                                    value: _showRouteTitles,
+                                    onChanged: _isSaving
+                                        ? null
+                                        : (value) {
+                                      setState(() {
+                                        _showRouteTitles = value;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              const Text("Aspect Ratio"),
+                              DropdownButton<String>(
+                                value: _selectedAspectRatio,
+                                items: ["9:16", "16:9", "3:2", "2:3", "1:1"].map((ratio) {
+                                  return DropdownMenuItem<String>(
+                                    value: ratio,
+                                    child: Text(ratio),
+                                  );
+                                }).toList(),
+                                onChanged: _isSaving
+                                    ? null
+                                    : (value) {
+                                  setState(() {
+                                    _selectedAspectRatio = value!;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              Center(
+                                child: SaveButton(
+                                  mapKey: repaintBoundaryKey,
+                                  frameCount: frameCount,
+                                  animationController: _animationController,
+                                  circlePositionNotifier: _circlePositionNotifier,
+                                  aspectRatio: _selectedAspectRatio,
+                                  mapController: _mapController,
+                                  currentRoute: currentRoute,
+                                  initialZoom: zoomLevel,
+                                  fitZoom: fitZoom,
+                                  markerSizeNotifier: _markerSizeNotifier,
+                                  directionNotifier: _directionNotifier,
+                                  onSaveStart: () {
+                                    print("Save started in AnimationScreen");
+                                    setState(() => _isSaving = true);
+                                    widget.onSavingChanged?.call(true);
+                                  },
+                                  onSaveComplete: () {
+                                    print("Save completed in AnimationScreen");
+                                    setState(() => _isSaving = false);
+                                    widget.onSavingChanged?.call(false);
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                          ElevatedButton(
-                            onPressed: () => _selectEndPoint(),
-                            child: Text("Set End Point"),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 10),
-                      Text("Animation Duration"),
-                      Slider(
-                        value: _animationController.duration!.inSeconds.toDouble(),
-                        min: 5,
-                        max: 24,
-                        divisions: 19,
-                        label: "${_animationController.duration!.inSeconds}s",
-                        onChanged: (value) {
-                          setState(() {
-                            _animationController.duration = Duration(seconds: value.toInt());
-                          });
-                        },
-                      ),
-                      SizedBox(height: 10),
-                      Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("Show Route Point Titles"),
-                          Switch(
-                            value: _showRouteTitles,
-                            onChanged: (value) {
-                              setState(() {
-                                _showRouteTitles = value;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 10),
-                      Text("Aspect Ratio"),
-                      DropdownButton<String>(
-                        value: _selectedAspectRatio,
-                        items: ["9:16", "16:9", "3:2", "2:3", "1:1"].map((ratio) {
-                          return DropdownMenuItem<String>(
-                            value: ratio,
-                            child: Text(ratio),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedAspectRatio = value!;
-                          });
-                        },
-                      ),
-                      SizedBox(height: 10),
-                      Center(
-                        child: SaveButton(
-                          mapKey: repaintBoundaryKey,
-                          frameCount: frameCount,
-                          animationController: _animationController,
-                          circlePositionNotifier: _circlePositionNotifier,
-                          aspectRatio: _selectedAspectRatio,
-                          mapController: _mapController,
-                          currentRoute: currentRoute,
-                          initialZoom: zoomLevel,
-                          fitZoom: fitZoom,
-                          markerSizeNotifier: _markerSizeNotifier,
-                          directionNotifier: _directionNotifier,
                         ),
                       ),
+                      if (_isSaving)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(10.0),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 4.0,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _toggleAnimation,
-        child: Icon(_isAnimating ? Icons.stop : Icons.play_arrow),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _toggleAnimation,
+          child: Icon(_isAnimating ? Icons.stop : Icons.play_arrow),
+        ),
       ),
     );
   }

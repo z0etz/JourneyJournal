@@ -83,6 +83,8 @@ class SaveButton extends StatefulWidget {
   final double fitZoom;
   final ValueNotifier<double> markerSizeNotifier;
   final ValueNotifier<double> directionNotifier;
+  final VoidCallback onSaveStart;
+  final VoidCallback onSaveComplete;
 
   SaveButton({
     required this.mapKey,
@@ -96,9 +98,9 @@ class SaveButton extends StatefulWidget {
     required this.fitZoom,
     required this.markerSizeNotifier,
     required this.directionNotifier,
-  }) {
-    print("SaveButton received mapKey: $mapKey");
-  }
+    required this.onSaveStart,
+    required this.onSaveComplete,
+  });
 
   @override
   _SaveButtonState createState() => _SaveButtonState();
@@ -112,6 +114,7 @@ class _SaveButtonState extends State<SaveButton> {
   void initState() {
     super.initState();
     _totalDistance = calculateTotalDistance(widget.currentRoute);
+    print("SaveButton initialized, mapKey: ${widget.mapKey}, totalDistance: $_totalDistance");
   }
 
   Size _getPixelDimensions() {
@@ -186,7 +189,7 @@ class _SaveButtonState extends State<SaveButton> {
       print("Frame $frameIndex saved at: $framePath (size: ${pixelSize.width}x${pixelSize.height})");
       return framePath;
     } catch (e) {
-      print("Error capturing frame: $e");
+      print("Error capturing frame $frameIndex: $e");
       return '';
     }
   }
@@ -223,12 +226,17 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   Future<void> _saveAnimation() async {
-    setState(() => _isSaving = true);
+    print("Starting save animation");
+    setState(() {
+      _isSaving = true;
+      print("SaveButton _isSaving set to true");
+    });
+    widget.onSaveStart();
 
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
-    const int zoomFrames = 45; //Frames for zoom at star and end (30 = 1sec)
+    const int zoomFrames = 45;
     final int followFrames = totalFrames - 2 * zoomFrames;
     LatLng? fittedCenter;
     final LatLng startPoint = widget.currentRoute.routePoints.first.point;
@@ -240,7 +248,6 @@ class _SaveButtonState extends State<SaveButton> {
     print("Initial Zoom: $initialZoom, Fit Zoom: $fitZoom, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
 
-    // Calculate directions
     double initialDirection = widget.currentRoute.routePoints.length > 1
         ? atan2(
       widget.currentRoute.routePoints[1].point.longitude - startPoint.longitude,
@@ -258,149 +265,164 @@ class _SaveButtonState extends State<SaveButton> {
     widget.directionNotifier.value = initialDirection;
     LatLng? lastPosition;
 
-    for (int frame = 0; frame < totalFrames; frame++) {
-      double progress;
-      if (frame < zoomFrames) {
-        progress = 0.0;
-        widget.directionNotifier.value = initialDirection; // Bounce-in
-      } else if (frame < zoomFrames + followFrames) {
-        double followT = (frame - zoomFrames) / followFrames.toDouble();
-        progress = followT.clamp(0.0, 1.0);
-      } else {
-        progress = 1.0;
-        widget.directionNotifier.value = finalDirection; // Bounce-out
-      }
+    try {
+      for (int frame = 0; frame < totalFrames; frame++) {
+        double progress;
+        if (frame < zoomFrames) {
+          progress = 0.0;
+          widget.directionNotifier.value = initialDirection;
+        } else if (frame < zoomFrames + followFrames) {
+          double followT = (frame - zoomFrames) / followFrames.toDouble();
+          progress = followT.clamp(0.0, 1.0);
+        } else {
+          progress = 1.0;
+          widget.directionNotifier.value = finalDirection;
+        }
 
-      widget.animationController.value = progress;
-      moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
-      LatLng currentPoint = widget.circlePositionNotifier.value;
+        widget.animationController.value = progress;
+        moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
+        LatLng currentPoint = widget.circlePositionNotifier.value;
 
-      // Only update direction dynamically if there's significant movement
-      if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
-        double deltaLat = currentPoint.latitude - lastPosition!.latitude;
-        double deltaLng = currentPoint.longitude - lastPosition!.longitude;
-        double distanceMoved = Geolocator.distanceBetween(
-          lastPosition!.latitude,
-          lastPosition!.longitude,
-          currentPoint.latitude,
-          currentPoint.longitude,
-        );
-        if (distanceMoved > 1.0) { // Threshold to avoid jitter at tiny movements
-          widget.directionNotifier.value = atan2(deltaLng, deltaLat);
+        if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
+          double deltaLat = currentPoint.latitude - lastPosition.latitude;
+          double deltaLng = currentPoint.longitude - lastPosition.longitude;
+          double distanceMoved = Geolocator.distanceBetween(
+            lastPosition.latitude,
+            lastPosition.longitude,
+            currentPoint.latitude,
+            currentPoint.longitude,
+          );
+          if (distanceMoved > 1.0) {
+            widget.directionNotifier.value = atan2(deltaLng, deltaLat);
+          }
         }
-      }
-      lastPosition = currentPoint;
-
-      if (frame < zoomFrames) {
-        double t = frame / (zoomFrames - 1).toDouble();
-        t = t.clamp(0.0, 1.0);
-        double bounceT = _easeOutBack(t);
-        widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        if (frame <= 5 || frame == zoomFrames - 1) {
-          print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}, Direction: ${widget.directionNotifier.value}");
-        }
-      } else if (frame < zoomFrames + followFrames) {
-        widget.markerSizeNotifier.value = markerBaseSize;
-        if (frame == zoomFrames || frame == zoomFrames + 1) {
-          print("Frame $frame (Follow Start): Progress: $progress, Position: $currentPoint, Direction: ${widget.directionNotifier.value}");
-        }
-      } else {
-        double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
-        t = t.clamp(0.0, 1.0);
-        double bounceT = _easeOutBack(1 - t);
-        widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        if (frame >= totalFrames - 5) {
-          print("Frame $frame (Zoom Out): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}, Direction: ${widget.directionNotifier.value}");
-        }
-      }
-
-      if (routeFits) {
-        print("Frame $frame (Static): Zoom $initialZoom, Center ${widget.mapController.camera.center}");
-      } else {
-        if (frame == 0) {
-          fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
-              isAnimationScreen: true);
-          await Future.delayed(Duration(milliseconds: 100));
-          fittedCenter = widget.mapController.camera.center;
-          print("Frame 0: Map fitted, Center: $fittedCenter");
-        }
+        lastPosition = currentPoint;
 
         if (frame < zoomFrames) {
           double t = frame / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
-          double zoomT = _easeInQuad(t);
-          double panT = _easeOutQuad(t);
-          double zoom = fitZoom + (initialZoom - fitZoom) * zoomT;
-          LatLng center = _interpolateCenter(fittedCenter!, startPoint, panT);
-          widget.mapController.move(center, zoom);
-          if (frame <= 5) {
-            print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT");
+          double bounceT = _easeOutBack(t);
+          widget.markerSizeNotifier.value = markerBaseSize * bounceT;
+          if (frame <= 5 || frame == zoomFrames - 1) {
+            print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}, Direction: ${widget.directionNotifier.value}");
           }
         } else if (frame < zoomFrames + followFrames) {
-          widget.mapController.move(currentPoint, initialZoom);
+          widget.markerSizeNotifier.value = markerBaseSize;
+          if (frame == zoomFrames || frame == zoomFrames + 1) {
+            print("Frame $frame (Follow Start): Progress: $progress, Position: $currentPoint, Direction: ${widget.directionNotifier.value}");
+          }
         } else {
           double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
           t = t.clamp(0.0, 1.0);
-          double zoomT = _easeOutQuad(t);
-          double panT = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2;
-          double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
-          LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
-          widget.mapController.move(center, zoom);
+          double bounceT = _easeOutBack(1 - t);
+          widget.markerSizeNotifier.value = markerBaseSize * bounceT;
+          if (frame >= totalFrames - 5) {
+            print("Frame $frame (Zoom Out): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}, Direction: ${widget.directionNotifier.value}");
+          }
+        }
+
+        if (routeFits) {
+          print("Frame $frame (Static): Zoom $initialZoom, Center ${widget.mapController.camera.center}");
+        } else {
+          if (frame == 0) {
+            fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
+                isAnimationScreen: true);
+            await Future.delayed(const Duration(milliseconds: 100));
+            fittedCenter = widget.mapController.camera.center;
+            print("Frame 0: Map fitted, Center: $fittedCenter");
+          }
+
+          if (frame < zoomFrames) {
+            double t = frame / (zoomFrames - 1).toDouble();
+            t = t.clamp(0.0, 1.0);
+            double zoomT = _easeInQuad(t);
+            double panT = _easeOutQuad(t);
+            double zoom = fitZoom + (initialZoom - fitZoom) * zoomT;
+            LatLng center = _interpolateCenter(fittedCenter!, startPoint, panT);
+            widget.mapController.move(center, zoom);
+            if (frame <= 5) {
+              print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT");
+            }
+          } else if (frame < zoomFrames + followFrames) {
+            widget.mapController.move(currentPoint, initialZoom);
+          } else {
+            double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
+            t = t.clamp(0.0, 1.0);
+            double zoomT = _easeOutQuad(t);
+            double panT = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2;
+            double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
+            LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
+            widget.mapController.move(center, zoom);
+          }
+        }
+
+        await Future.delayed(const Duration(milliseconds: 33)); // Hardcoded 33 ms for 30 FPS
+        String framePath = await _captureFrame(frame);
+        if (framePath.isNotEmpty) {
+          framePaths.add(framePath);
+        } else {
+          print("Frame $frame capture failed, continuing...");
         }
       }
 
-      await Future.delayed(Duration(milliseconds: (1000 / 30).round()));
-      String framePath = await _captureFrame(frame);
-      if (framePath.isNotEmpty) {
-        framePaths.add(framePath);
+      if (framePaths.isNotEmpty) {
+        final dcimDir = Directory('/storage/emulated/0/DCIM/JourneyJournal');
+        if (!await dcimDir.exists()) {
+          await dcimDir.create(recursive: true);
+        }
+        final videoPath = '${dcimDir.path}/output_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        final pixelSize = _getPixelDimensions();
+
+        print("Setting up video encoder: $videoPath");
+        await FlutterQuickVideoEncoder.setup(
+          width: pixelSize.width.toInt(),
+          height: pixelSize.height.toInt(),
+          fps: 30,
+          videoBitrate: 8000000,
+          audioChannels: 0,
+          audioBitrate: 0,
+          sampleRate: 0,
+          profileLevel: ProfileLevel.high40,
+          filepath: videoPath,
+        );
+
+        for (String framePath in framePaths) {
+          await _encodeFrame(framePath);
+        }
+
+        await FlutterQuickVideoEncoder.finish();
+        print("Video saved at: $videoPath");
+
+        final frameDir = await _getTempFrameDir();
+        await frameDir.delete(recursive: true);
+        print("Temporary frames deleted");
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Video saved at: $videoPath')),
+        );
+      } else {
+        print("No frames captured, skipping video encoding");
       }
+    } catch (e) {
+      print("Error during save animation: $e");
+    } finally {
+      print("Save animation finished, resetting _isSaving");
+      setState(() {
+        _isSaving = false;
+        print("SaveButton _isSaving set to false");
+      });
+      widget.onSaveComplete();
     }
 
-    if (framePaths.isNotEmpty) {
-      final dcimDir = Directory('/storage/emulated/0/DCIM/JourneyJournal');
-      if (!await dcimDir.exists()) {
-        await dcimDir.create(recursive: true);
-      }
-      final videoPath = '${dcimDir.path}/output_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
-      final pixelSize = _getPixelDimensions();
-
-      await FlutterQuickVideoEncoder.setup(
-        width: pixelSize.width.toInt(),
-        height: pixelSize.height.toInt(),
-        fps: 30,
-        videoBitrate: 8000000,
-        audioChannels: 0,
-        audioBitrate: 0,
-        sampleRate: 0,
-        profileLevel: ProfileLevel.high40,
-        filepath: videoPath,
-      );
-
-      for (String framePath in framePaths) {
-        await _encodeFrame(framePath);
-      }
-
-      await FlutterQuickVideoEncoder.finish();
-      print("Video saved at: $videoPath");
-
-      final frameDir = await _getTempFrameDir();
-      await frameDir.delete(recursive: true);
-      print("Temporary frames deleted");
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Video saved at: $videoPath')),
-      );
-    }
-
-    setState(() => _isSaving = false);
     print("Captured and encoded ${framePaths.length} frames");
   }
 
   @override
   Widget build(BuildContext context) {
+    print("SaveButton build, _isSaving: $_isSaving");
     return ElevatedButton(
       onPressed: _isSaving ? null : _saveAnimation,
-      child: _isSaving ? CircularProgressIndicator() : Text("Save Animation"),
+      child: _isSaving ? const CircularProgressIndicator() : const Text("Save Animation"),
     );
   }
 }
