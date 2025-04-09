@@ -34,8 +34,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   int frameCount = 100;
 
   final ValueNotifier<LatLng> _circlePositionNotifier = ValueNotifier<LatLng>(LatLng(0.0, 0.0));
-  final ValueNotifier<double> _markerSizeNotifier = ValueNotifier<double>(0.0); // Starts hidden
-  final ValueNotifier<double> _directionNotifier = ValueNotifier<double>(0.0); // Add for arrow direction
+  final ValueNotifier<double> _markerSizeNotifier = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _directionNotifier = ValueNotifier<double>(0.0);
 
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
@@ -103,6 +103,13 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     if (currentRoute.routePoints.isNotEmpty) {
       LatLng firstPoint = currentRoute.routePoints.first.point;
       _circlePositionNotifier.value = firstPoint;
+      if (currentRoute.routePoints.length > 1) {
+        LatLng secondPoint = currentRoute.routePoints[1].point;
+        _directionNotifier.value = atan2(
+          secondPoint.longitude - firstPoint.longitude,
+          secondPoint.latitude - firstPoint.latitude,
+        );
+      }
     }
   }
 
@@ -111,8 +118,17 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _animationController.stop();
       _animationController.reset();
       _circlePositionNotifier.value = currentRoute.routePoints.first.point;
-      _markerSizeNotifier.value = 0.0; // Hide marker
-      _directionNotifier.value = 0.0; // Reset direction
+      _markerSizeNotifier.value = 0.0;
+      if (currentRoute.routePoints.length > 1) {
+        LatLng firstPoint = currentRoute.routePoints.first.point;
+        LatLng secondPoint = currentRoute.routePoints[1].point;
+        _directionNotifier.value = atan2(
+          secondPoint.longitude - firstPoint.longitude,
+          secondPoint.latitude - firstPoint.latitude,
+        );
+      } else {
+        _directionNotifier.value = 0.0;
+      }
       setState(() {
         _isAnimating = false;
       });
@@ -149,23 +165,32 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         ),
       );
 
-      _markerSizeNotifier.value = markerBaseSize; // Show marker during preview
-      LatLng? lastPosition; // Track previous position for direction
+      _markerSizeNotifier.value = markerBaseSize;
+      LatLng? lastPosition;
       _progressAnimation.addListener(() {
         moveCircleAlongPath(_progressAnimation.value, currentRoute, _circlePositionNotifier, _totalDistance);
         LatLng currentPosition = _circlePositionNotifier.value;
         if (lastPosition != null) {
           double deltaLat = currentPosition.latitude - lastPosition!.latitude;
           double deltaLng = currentPosition.longitude - lastPosition!.longitude;
-          _directionNotifier.value = atan2(deltaLng, deltaLat); // Calculate direction
+          _directionNotifier.value = atan2(deltaLng, deltaLat);
         }
         lastPosition = currentPosition;
       });
 
       _animationController.reset();
       _animationController.forward().then((_) {
-        _markerSizeNotifier.value = 0.0; // Reset marker size when preview ends
-        _directionNotifier.value = 0.0; // Reset direction
+        _markerSizeNotifier.value = 0.0;
+        if (currentRoute.routePoints.length > 1) {
+          LatLng secondLast = currentRoute.routePoints[currentRoute.routePoints.length - 2].point;
+          LatLng last = currentRoute.routePoints.last.point;
+          _directionNotifier.value = atan2(
+            last.longitude - secondLast.longitude,
+            last.latitude - secondLast.latitude,
+          );
+        } else {
+          _directionNotifier.value = 0.0;
+        }
         setState(() {
           _isAnimating = false;
         });
@@ -280,7 +305,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                               child: Transform.rotate(
                                                 angle: direction,
                                                 child: Icon(
-                                                  Icons.toys, // Change to arrow
+                                                  Icons.navigation,
                                                   color: Colors.orange,
                                                   size: size,
                                                 ),
@@ -390,6 +415,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                           initialZoom: zoomLevel,
                           fitZoom: fitZoom,
                           markerSizeNotifier: _markerSizeNotifier,
+                          directionNotifier: _directionNotifier,
                         ),
                       ),
                     ],

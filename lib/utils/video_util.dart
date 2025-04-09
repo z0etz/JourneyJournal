@@ -82,6 +82,7 @@ class SaveButton extends StatefulWidget {
   final double initialZoom;
   final double fitZoom;
   final ValueNotifier<double> markerSizeNotifier;
+  final ValueNotifier<double> directionNotifier;
 
   SaveButton({
     required this.mapKey,
@@ -94,6 +95,7 @@ class SaveButton extends StatefulWidget {
     required this.initialZoom,
     required this.fitZoom,
     required this.markerSizeNotifier,
+    required this.directionNotifier,
   }) {
     print("SaveButton received mapKey: $mapKey");
   }
@@ -105,7 +107,6 @@ class SaveButton extends StatefulWidget {
 class _SaveButtonState extends State<SaveButton> {
   bool _isSaving = false;
   late double _totalDistance;
-  final ValueNotifier<double> _directionNotifier = ValueNotifier<double>(0.0); // Add for arrow direction
 
   @override
   void initState() {
@@ -135,7 +136,7 @@ class _SaveButtonState extends State<SaveButton> {
 
   Future<String> _captureFrame(int frameIndex) async {
     try {
-      print("Capturing frame: $frameIndex");
+      print("Capturing frame: $frameIndex, Direction: ${widget.directionNotifier.value}");
 
       final BuildContext? context = widget.mapKey.currentContext;
       if (context == null) {
@@ -239,28 +240,45 @@ class _SaveButtonState extends State<SaveButton> {
     print("Initial Zoom: $initialZoom, Fit Zoom: $fitZoom, Route Fits: $routeFits");
     print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
 
+    // Calculate directions
+    double initialDirection = widget.currentRoute.routePoints.length > 1
+        ? atan2(
+      widget.currentRoute.routePoints[1].point.longitude - startPoint.longitude,
+      widget.currentRoute.routePoints[1].point.latitude - startPoint.latitude,
+    )
+        : 0.0;
+    double finalDirection = widget.currentRoute.routePoints.length > 1
+        ? atan2(
+      endPoint.longitude - widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.longitude,
+      endPoint.latitude - widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.latitude,
+    )
+        : 0.0;
+
     widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
-    LatLng? lastPosition; // Track previous position for direction
+    widget.directionNotifier.value = initialDirection; // Set initial direction
+    LatLng? lastPosition;
 
     for (int frame = 0; frame < totalFrames; frame++) {
       double progress;
       if (frame < zoomFrames) {
         progress = 0.0;
+        widget.directionNotifier.value = initialDirection; // Ensure bounce-in direction
       } else if (frame < zoomFrames + followFrames) {
         double followT = (frame - zoomFrames) / followFrames.toDouble();
         progress = followT.clamp(0.0, 1.0);
       } else {
         progress = 1.0;
+        widget.directionNotifier.value = finalDirection; // Ensure bounce-out direction
       }
 
       widget.animationController.value = progress;
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
-      if (lastPosition != null) {
+      if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
         double deltaLat = currentPoint.latitude - lastPosition!.latitude;
         double deltaLng = currentPoint.longitude - lastPosition!.longitude;
-        _directionNotifier.value = atan2(deltaLng, deltaLat); // Calculate direction
+        widget.directionNotifier.value = atan2(deltaLng, deltaLat);
       }
       lastPosition = currentPoint;
 
@@ -270,7 +288,7 @@ class _SaveButtonState extends State<SaveButton> {
         double bounceT = _easeOutBack(t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
         if (frame <= 5 || frame == 30) {
-          print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
+          print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}, Direction: ${widget.directionNotifier.value}");
         }
       } else if (frame < zoomFrames + followFrames) {
         widget.markerSizeNotifier.value = markerBaseSize;
@@ -280,7 +298,7 @@ class _SaveButtonState extends State<SaveButton> {
         double bounceT = _easeOutBack(1 - t);
         widget.markerSizeNotifier.value = markerBaseSize * bounceT;
         if (frame >= totalFrames - 5) {
-          print("Frame $frame (Zoom Out): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
+          print("Frame $frame (Zoom Out): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}, Direction: ${widget.directionNotifier.value}");
         }
       }
 
@@ -304,7 +322,7 @@ class _SaveButtonState extends State<SaveButton> {
           LatLng center = _interpolateCenter(fittedCenter!, startPoint, panT);
           widget.mapController.move(center, zoom);
           if (frame <= 5) {
-            print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT, Marker Size: ${widget.markerSizeNotifier.value}");
+            print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT");
           }
         } else if (frame < zoomFrames + followFrames) {
           widget.mapController.move(currentPoint, initialZoom);
