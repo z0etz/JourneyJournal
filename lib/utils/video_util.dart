@@ -219,10 +219,10 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   Future<void> _saveAnimation() async {
-    if (widget.isSavingNotifier.value) return; // Prevent re-entry
+    if (widget.isSavingNotifier.value) return;
 
     print("Save animation started");
-    widget.isSavingNotifier.value = true; // Update notifier instead of local state
+    widget.isSavingNotifier.value = true;
     print("SaveButton isSavingNotifier set to true");
     widget.onSaveStart();
 
@@ -238,6 +238,7 @@ class _SaveButtonState extends State<SaveButton> {
     final double initialZoom = widget.initialZoom;
     const double markerBaseSize = 25.0;
 
+    // Recalculate directions
     double initialDirection = widget.currentRoute.routePoints.length > 1
         ? atan2(
       widget.currentRoute.routePoints[1].point.longitude - startPoint.longitude,
@@ -253,21 +254,36 @@ class _SaveButtonState extends State<SaveButton> {
     )
         : 0.0;
 
+    // Full reset
     widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
     widget.directionNotifier.value = initialDirection;
+    widget.circlePositionNotifier.value = startPoint;
+    widget.animationController.reset();
+    await Future.delayed(const Duration(milliseconds: 50)); // Allow UI to update
     LatLng? lastPosition;
 
     for (int frame = 0; frame < totalFrames; frame++) {
+      if (!widget.isSavingNotifier.value) {
+        print("Save cancelled at frame $frame");
+        widget.isSavingNotifier.value = false;
+        widget.onSaveComplete();
+        final frameDir = await _getTempFrameDir();
+        if (await frameDir.exists()) await frameDir.delete(recursive: true);
+        return;
+      }
+
       double progress;
       if (frame < zoomFrames) {
         progress = 0.0;
         widget.directionNotifier.value = initialDirection;
+        print("Frame $frame, direction: ${widget.directionNotifier.value}");
       } else if (frame < zoomFrames + followFrames) {
         double followT = (frame - zoomFrames) / followFrames.toDouble();
         progress = followT.clamp(0.0, 1.0);
       } else {
         progress = 1.0;
         widget.directionNotifier.value = finalDirection;
+        print("Frame $frame, direction: ${widget.directionNotifier.value}");
       }
 
       widget.animationController.value = progress;
@@ -285,6 +301,7 @@ class _SaveButtonState extends State<SaveButton> {
         );
         if (distanceMoved > 1.0) {
           widget.directionNotifier.value = atan2(deltaLng, deltaLat);
+          print("Frame $frame, direction: ${widget.directionNotifier.value}");
         }
       }
       lastPosition = currentPoint;
@@ -351,6 +368,15 @@ class _SaveButtonState extends State<SaveButton> {
       );
 
       for (String framePath in framePaths) {
+        if (!widget.isSavingNotifier.value) {
+          print("Save cancelled during encoding");
+          await FlutterQuickVideoEncoder.finish();
+          widget.isSavingNotifier.value = false;
+          widget.onSaveComplete();
+          final frameDir = await _getTempFrameDir();
+          if (await frameDir.exists()) await frameDir.delete(recursive: true);
+          return;
+        }
         await _encodeFrame(framePath);
       }
 
@@ -360,12 +386,10 @@ class _SaveButtonState extends State<SaveButton> {
       final frameDir = await _getTempFrameDir();
       await frameDir.delete(recursive: true);
 
-      // Reset UI using notifier
       widget.isSavingNotifier.value = false;
       print("SaveButton isSavingNotifier set to false");
       widget.onSaveComplete();
 
-      // Show snackbar only if still mounted
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Video saved at: $videoPath')));
@@ -373,7 +397,6 @@ class _SaveButtonState extends State<SaveButton> {
         print("SaveButton unmounted, skipping snackbar");
       }
     } else {
-      // Reset UI even if no frames were saved
       widget.isSavingNotifier.value = false;
       print("SaveButton isSavingNotifier set to false (no frames)");
       widget.onSaveComplete();
