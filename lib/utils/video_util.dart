@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'dart:math' as math;
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -82,8 +82,12 @@ class SaveButton extends StatefulWidget {
   final double initialZoom;
   final double fitZoom;
   final ValueNotifier<double> markerSizeNotifier;
+  final ValueNotifier<double> directionNotifier;
+  final VoidCallback onSaveStart;
+  final VoidCallback onSaveComplete;
+  final ValueNotifier<bool> isSavingNotifier; // Added parameter
 
-  SaveButton({
+  const SaveButton({ // Updated constructor
     required this.mapKey,
     required this.frameCount,
     required this.animationController,
@@ -94,32 +98,41 @@ class SaveButton extends StatefulWidget {
     required this.initialZoom,
     required this.fitZoom,
     required this.markerSizeNotifier,
-  }) {
-    print("SaveButton received mapKey: $mapKey");
-  }
+    required this.directionNotifier,
+    required this.onSaveStart,
+    required this.onSaveComplete,
+    required this.isSavingNotifier,
+    super.key,
+  });
 
   @override
   _SaveButtonState createState() => _SaveButtonState();
 }
 
 class _SaveButtonState extends State<SaveButton> {
-  bool _isSaving = false;
   late double _totalDistance;
 
   @override
   void initState() {
     super.initState();
     _totalDistance = calculateTotalDistance(widget.currentRoute);
+    print("SaveButton initialized, totalDistance: $_totalDistance");
   }
 
   Size _getPixelDimensions() {
     switch (widget.aspectRatio) {
-      case "9:16": return Size(576, 1024);
-      case "16:9": return Size(1024, 576);
-      case "3:2": return Size(768, 512);
-      case "2:3": return Size(512, 768);
-      case "1:1": return Size(512, 512);
-      default: return Size(576, 1024);
+      case "9:16":
+        return Size(576, 1024);
+      case "16:9":
+        return Size(1024, 576);
+      case "3:2":
+        return Size(768, 512);
+      case "2:3":
+        return Size(512, 768);
+      case "1:1":
+        return Size(512, 512);
+      default:
+        return Size(576, 1024);
     }
   }
 
@@ -133,76 +146,59 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   Future<String> _captureFrame(int frameIndex) async {
-    try {
-      print("Capturing frame: $frameIndex");
-
-      final BuildContext? context = widget.mapKey.currentContext;
-      if (context == null) {
-        print("No context available for frame: $frameIndex (mapKey not mounted)");
-        return '';
-      }
-
-      RenderObject? renderObject = context.findRenderObject();
-      if (renderObject == null) {
-        print("No render object found for frame: $frameIndex");
-        return '';
-      }
-
-      if (renderObject is! RenderRepaintBoundary) {
-        print("Render object is not a RepaintBoundary: ${renderObject.runtimeType}");
-        return '';
-      }
-      RenderRepaintBoundary boundary = renderObject;
-
-      ui.Image image = await boundary.toImage(pixelRatio: 1.0);
-      final pixelSize = _getPixelDimensions();
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      Paint paint = Paint()..filterQuality = FilterQuality.high;
-      canvas.drawImageRect(
-        image,
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        Rect.fromLTWH(0, 0, pixelSize.width, pixelSize.height),
-        paint,
-      );
-      final resizedImage = await recorder.endRecording().toImage(
-        pixelSize.width.toInt(),
-        pixelSize.height.toInt(),
-      );
-
-      ByteData? byteData = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) {
-        print("Failed to capture frame: $frameIndex (ByteData is null)");
-        return '';
-      }
-
-      Uint8List pngBytes = byteData.buffer.asUint8List();
-      final frameDir = await _getTempFrameDir();
-      final framePath = '${frameDir.path}/frame_$frameIndex.png';
-      await File(framePath).writeAsBytes(pngBytes);
-
-      print("Frame $frameIndex saved at: $framePath (size: ${pixelSize.width}x${pixelSize.height})");
-      return framePath;
-    } catch (e) {
-      print("Error capturing frame: $e");
+    final BuildContext? context = widget.mapKey.currentContext;
+    if (context == null) {
+      print("No context available for frame: $frameIndex");
       return '';
     }
+
+    RenderObject? renderObject = context.findRenderObject();
+    if (renderObject == null || renderObject is! RenderRepaintBoundary) {
+      print("No valid render object for frame: $frameIndex");
+      return '';
+    }
+    RenderRepaintBoundary boundary = renderObject;
+
+    ui.Image image = await boundary.toImage(pixelRatio: 1.0);
+    final pixelSize = _getPixelDimensions();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    Paint paint = Paint()..filterQuality = FilterQuality.high;
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromLTWH(0, 0, pixelSize.width, pixelSize.height),
+      paint,
+    );
+    final resizedImage = await recorder.endRecording().toImage(
+      pixelSize.width.toInt(),
+      pixelSize.height.toInt(),
+    );
+
+    ByteData? byteData = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) {
+      print("Failed to capture frame: $frameIndex (ByteData is null)");
+      return '';
+    }
+
+    Uint8List pngBytes = byteData.buffer.asUint8List();
+    final frameDir = await _getTempFrameDir();
+    final framePath = '${frameDir.path}/frame_$frameIndex.png';
+    await File(framePath).writeAsBytes(pngBytes);
+    print("Frame $frameIndex saved at: $framePath");
+    return framePath;
   }
 
   Future<void> _encodeFrame(String framePath) async {
-    try {
-      ui.Image image = await decodeImageFromList(await File(framePath).readAsBytes());
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-      if (byteData == null) {
-        print("Failed to convert frame to RGBA: $framePath");
-        return;
-      }
-      Uint8List rgbaBytes = byteData.buffer.asUint8List();
-      await FlutterQuickVideoEncoder.appendVideoFrame(rgbaBytes);
-      print("Frame $framePath appended to video");
-    } catch (e) {
-      print("Error encoding frame $framePath: $e");
+    ui.Image image = await decodeImageFromList(await File(framePath).readAsBytes());
+    ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) {
+      print("Failed to convert frame to RGBA: $framePath");
+      return;
     }
+    Uint8List rgbaBytes = byteData.buffer.asUint8List();
+    await FlutterQuickVideoEncoder.appendVideoFrame(rgbaBytes);
+    print("Frame $framePath appended to video");
   }
 
   LatLng _interpolateCenter(LatLng start, LatLng end, double t) {
@@ -212,21 +208,28 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   double _easeInQuad(double t) => t * t;
+
   double _easeOutQuad(double t) => t * (2 - t);
+
   double _easeOutBack(double t) {
-    const double c = 5; // Test with 5, 10, 100 later
+    const double c = 5;
     double s = t - 1;
     double bounce = c * s * s * (s + 1);
     return 0.1 + 0.9 * t + bounce;
   }
 
   Future<void> _saveAnimation() async {
-    setState(() => _isSaving = true);
+    if (widget.isSavingNotifier.value) return;
+
+    print("Save animation started");
+    widget.isSavingNotifier.value = true;
+    print("SaveButton isSavingNotifier set to true");
+    widget.onSaveStart();
 
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
-    const int zoomFrames = 45; //Frames for zoom at star and end (30 = 1sec)
+    const int zoomFrames = 45;
     final int followFrames = totalFrames - 2 * zoomFrames;
     LatLng? fittedCenter;
     final LatLng startPoint = widget.currentRoute.routePoints.first.point;
@@ -235,93 +238,120 @@ class _SaveButtonState extends State<SaveButton> {
     final double initialZoom = widget.initialZoom;
     const double markerBaseSize = 25.0;
 
-    print("Initial Zoom: $initialZoom, Fit Zoom: $fitZoom, Route Fits: $routeFits");
-    print("Total Frames: $totalFrames, Zoom Frames: $zoomFrames, Follow Frames: $followFrames");
+    // Recalculate directions
+    double initialDirection = widget.currentRoute.routePoints.length > 1
+        ? atan2(
+      widget.currentRoute.routePoints[1].point.longitude - startPoint.longitude,
+      widget.currentRoute.routePoints[1].point.latitude - startPoint.latitude,
+    )
+        : 0.0;
+    double finalDirection = widget.currentRoute.routePoints.length > 1
+        ? atan2(
+      endPoint.longitude -
+          widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.longitude,
+      endPoint.latitude -
+          widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.latitude,
+    )
+        : 0.0;
 
-    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0); // ~2.5
+    // Full reset
+    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
+    widget.directionNotifier.value = initialDirection;
+    widget.circlePositionNotifier.value = startPoint;
+    widget.animationController.reset();
+    await Future.delayed(const Duration(milliseconds: 50)); // Allow UI to update
+    LatLng? lastPosition;
 
     for (int frame = 0; frame < totalFrames; frame++) {
+      if (!widget.isSavingNotifier.value) {
+        print("Save cancelled at frame $frame");
+        widget.isSavingNotifier.value = false;
+        widget.onSaveComplete();
+        final frameDir = await _getTempFrameDir();
+        if (await frameDir.exists()) await frameDir.delete(recursive: true);
+        return;
+      }
+
       double progress;
       if (frame < zoomFrames) {
         progress = 0.0;
+        widget.directionNotifier.value = initialDirection;
+        print("Frame $frame, direction: ${widget.directionNotifier.value}");
       } else if (frame < zoomFrames + followFrames) {
         double followT = (frame - zoomFrames) / followFrames.toDouble();
         progress = followT.clamp(0.0, 1.0);
       } else {
         progress = 1.0;
+        widget.directionNotifier.value = finalDirection;
+        print("Frame $frame, direction: ${widget.directionNotifier.value}");
       }
 
       widget.animationController.value = progress;
       moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
+      if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
+        double deltaLat = currentPoint.latitude - lastPosition.latitude;
+        double deltaLng = currentPoint.longitude - lastPosition.longitude;
+        double distanceMoved = Geolocator.distanceBetween(
+          lastPosition.latitude,
+          lastPosition.longitude,
+          currentPoint.latitude,
+          currentPoint.longitude,
+        );
+        if (distanceMoved > 1.0) {
+          widget.directionNotifier.value = atan2(deltaLng, deltaLat);
+          print("Frame $frame, direction: ${widget.directionNotifier.value}");
+        }
+      }
+      lastPosition = currentPoint;
+
       if (frame < zoomFrames) {
         double t = frame / (zoomFrames - 1).toDouble();
-        t = t.clamp(0.0, 1.0);
-        double bounceT = _easeOutBack(t);
-        widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        if (frame <= 5 || frame == 30) {
-          print("Frame $frame (Zoom In): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
-        }
+        widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(t.clamp(0.0, 1.0));
       } else if (frame < zoomFrames + followFrames) {
         widget.markerSizeNotifier.value = markerBaseSize;
       } else {
         double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
-        t = t.clamp(0.0, 1.0);
-        double bounceT = _easeOutBack(1 - t);
-        widget.markerSizeNotifier.value = markerBaseSize * bounceT;
-        if (frame >= totalFrames - 5) {
-          print("Frame $frame (Zoom Out): t: $t, BounceT: $bounceT, Marker Size: ${widget.markerSizeNotifier.value}");
-        }
+        widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(1 - t.clamp(0.0, 1.0));
       }
 
-      if (routeFits) {
-        print("Frame $frame (Static): Zoom $initialZoom, Center ${widget.mapController.camera.center}");
-      } else {
+      if (!routeFits) {
         if (frame == 0) {
-          fitMapToRoute(widget.mapController, widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
+          fitMapToRoute(widget.mapController,
+              widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
               isAnimationScreen: true);
-          await Future.delayed(Duration(milliseconds: 100));
+          await Future.delayed(const Duration(milliseconds: 100));
           fittedCenter = widget.mapController.camera.center;
-          print("Frame 0: Map fitted, Center: $fittedCenter");
         }
 
         if (frame < zoomFrames) {
           double t = frame / (zoomFrames - 1).toDouble();
-          t = t.clamp(0.0, 1.0);
-          double zoomT = _easeInQuad(t);
-          double panT = _easeOutQuad(t);
+          double zoomT = _easeInQuad(t.clamp(0.0, 1.0));
+          double panT = _easeOutQuad(t.clamp(0.0, 1.0));
           double zoom = fitZoom + (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(fittedCenter!, startPoint, panT);
           widget.mapController.move(center, zoom);
-          if (frame <= 5) {
-            print("Frame $frame (Zoom In): Zoom $zoom, Center $center, t: $t, Zoom t: $zoomT, Pan t: $panT, Marker Size: ${widget.markerSizeNotifier.value}");
-          }
         } else if (frame < zoomFrames + followFrames) {
           widget.mapController.move(currentPoint, initialZoom);
         } else {
           double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
-          t = t.clamp(0.0, 1.0);
-          double zoomT = _easeOutQuad(t);
-          double panT = t < 0.5 ? 2 * t * t : 1 - math.pow(-2 * t + 2, 2) / 2;
+          double zoomT = _easeOutQuad(t.clamp(0.0, 1.0));
+          double panT = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2;
           double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
           widget.mapController.move(center, zoom);
         }
       }
 
-      await Future.delayed(Duration(milliseconds: (1000 / 30).round()));
+      await Future.delayed(const Duration(milliseconds: 33));
       String framePath = await _captureFrame(frame);
-      if (framePath.isNotEmpty) {
-        framePaths.add(framePath);
-      }
+      if (framePath.isNotEmpty) framePaths.add(framePath);
     }
 
     if (framePaths.isNotEmpty) {
       final dcimDir = Directory('/storage/emulated/0/DCIM/JourneyJournal');
-      if (!await dcimDir.exists()) {
-        await dcimDir.create(recursive: true);
-      }
+      if (!await dcimDir.exists()) await dcimDir.create(recursive: true);
       final videoPath = '${dcimDir.path}/output_video_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final pixelSize = _getPixelDimensions();
 
@@ -338,6 +368,15 @@ class _SaveButtonState extends State<SaveButton> {
       );
 
       for (String framePath in framePaths) {
+        if (!widget.isSavingNotifier.value) {
+          print("Save cancelled during encoding");
+          await FlutterQuickVideoEncoder.finish();
+          widget.isSavingNotifier.value = false;
+          widget.onSaveComplete();
+          final frameDir = await _getTempFrameDir();
+          if (await frameDir.exists()) await frameDir.delete(recursive: true);
+          return;
+        }
         await _encodeFrame(framePath);
       }
 
@@ -346,22 +385,42 @@ class _SaveButtonState extends State<SaveButton> {
 
       final frameDir = await _getTempFrameDir();
       await frameDir.delete(recursive: true);
-      print("Temporary frames deleted");
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Video saved at: $videoPath')),
-      );
+      widget.isSavingNotifier.value = false;
+      print("SaveButton isSavingNotifier set to false");
+      widget.onSaveComplete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Video saved at: $videoPath')));
+      } else {
+        print("SaveButton unmounted, skipping snackbar");
+      }
+    } else {
+      widget.isSavingNotifier.value = false;
+      print("SaveButton isSavingNotifier set to false (no frames)");
+      widget.onSaveComplete();
+      print("No frames captured, save completed without video");
     }
-
-    setState(() => _isSaving = false);
-    print("Captured and encoded ${framePaths.length} frames");
   }
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: _isSaving ? null : _saveAnimation,
-      child: _isSaving ? CircularProgressIndicator() : Text("Save Animation"),
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.isSavingNotifier,
+      builder: (context, isSaving, child) {
+        print("SaveButton build, isSaving: $isSaving");
+        return ElevatedButton(
+          onPressed: isSaving ? null : _saveAnimation,
+          child: isSaving
+              ? const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.0),
+          )
+              : const Text("Save Animation"),
+        );
+      },
     );
   }
 }
