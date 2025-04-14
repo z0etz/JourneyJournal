@@ -5,12 +5,17 @@ import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
 import 'package:journeyjournal/utils/video_util.dart';
+import 'package:geolocator/geolocator.dart';
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
   final Function(bool)? onSavingChanged;
 
-  const AnimationScreen({super.key, this.initialRoute, this.onSavingChanged});
+  const AnimationScreen({
+    super.key,
+    this.initialRoute,
+    this.onSavingChanged,
+  });
 
   @override
   State<AnimationScreen> createState() => _AnimationScreenState();
@@ -20,12 +25,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   late RouteModel currentRoute;
   bool _isAnimating = false;
   final ValueNotifier<bool> _isSavingNotifier = ValueNotifier<bool>(false);
-  final int _currentMarkerIndex = 0;
   bool _isControlsExpanded = false;
-  int _startMarkerIndex = 0;
-  int _endMarkerIndex = 0;
   bool _showRouteTitles = false;
   String _selectedAspectRatio = "9:16";
+  bool _selectingStart = false;
+  bool _selectingEnd = false;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -62,6 +66,35 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     }
   }
 
+  void _handleMarkerTap(int index) {
+    setState(() {
+      if (_selectingStart) {
+        if (index < currentRoute.endIndex) {
+          currentRoute.startIndex = index;
+          _totalDistance = calculateTotalDistance(
+            currentRoute,
+            startIndex: currentRoute.startIndex,
+            endIndex: currentRoute.endIndex,
+          );
+          _setInitialCirclePosition();
+          currentRoute.save();
+          _selectingStart = false; // Exit selection mode
+        }
+      } else if (_selectingEnd) {
+        if (index > currentRoute.startIndex) {
+          currentRoute.endIndex = index;
+          _totalDistance = calculateTotalDistance(
+            currentRoute,
+            startIndex: currentRoute.startIndex,
+            endIndex: currentRoute.endIndex,
+          );
+          currentRoute.save();
+          _selectingEnd = false; // Exit selection mode
+        }
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -88,10 +121,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _fitMapToRoute();
       });
+      _totalDistance = calculateTotalDistance(
+        currentRoute,
+        startIndex: currentRoute.startIndex,
+        endIndex: currentRoute.endIndex,
+      );
     }
 
     setState(() {});
-    _totalDistance = calculateTotalDistance(currentRoute);
   }
 
   void _fitMapToRoute() {
@@ -101,12 +138,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       currentRoute.routePoints.map((rp) => rp.point).toList(),
       isAnimationScreen: true,
     );
-    // Double post-frame to ensure camera sync
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         setState(() {
           fitZoom = _mapController.camera.zoom;
-          zoomLevel = _mapController.camera.zoom; // Reset initialZoom
+          zoomLevel = _mapController.camera.zoom;
           mapPosition = _mapController.camera.center;
         });
         if (currentRoute.routePoints.isNotEmpty) {
@@ -117,119 +153,178 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _setInitialCirclePosition() {
-    if (currentRoute.routePoints.isNotEmpty) {
-      LatLng firstPoint = currentRoute.routePoints.first.point;
-      _circlePositionNotifier.value = firstPoint;
-      if (currentRoute.routePoints.length > 1) {
-        LatLng secondPoint = currentRoute.routePoints[1].point;
-        double initialDirection = atan2(
-          secondPoint.longitude - firstPoint.longitude,
-          secondPoint.latitude - firstPoint.latitude,
-        );
-        _directionNotifier.value = initialDirection;
-        _saveDirectionNotifier.value = initialDirection;
-      }
+    if (currentRoute.routePoints.isEmpty) return;
+    LatLng startPoint = currentRoute.routePoints[currentRoute.startIndex].point;
+    _circlePositionNotifier.value = startPoint;
+    if (currentRoute.startIndex < currentRoute.endIndex && currentRoute.startIndex + 1 < currentRoute.routePoints.length) {
+      LatLng nextPoint = currentRoute.routePoints[currentRoute.startIndex + 1].point;
+      double initialDirection = atan2(
+        nextPoint.longitude - startPoint.longitude,
+        nextPoint.latitude - startPoint.latitude,
+      );
+      _directionNotifier.value = initialDirection;
+      _saveDirectionNotifier.value = initialDirection;
+    } else {
+      _directionNotifier.value = 0.0;
+      _saveDirectionNotifier.value = 0.0;
     }
   }
 
   void _toggleAnimation() {
-    if (_isSavingNotifier.value) {
+    if (_isSavingNotifier.value || _isAnimating) {
       _isSavingNotifier.value = false;
       _animationController.stop();
       _animationController.reset();
-      _circlePositionNotifier.value = currentRoute.routePoints.first.point;
+      if (currentRoute.routePoints.isNotEmpty) {
+        _circlePositionNotifier.value = currentRoute.routePoints[currentRoute.startIndex].point;
+      }
       _markerSizeNotifier.value = 0.0;
-      double initialDirection = currentRoute.routePoints.length > 1
+      double initialDirection = currentRoute.startIndex < currentRoute.endIndex && currentRoute.startIndex + 1 < currentRoute.routePoints.length
           ? atan2(
-        currentRoute.routePoints[1].point.longitude - currentRoute.routePoints[0].point.longitude,
-        currentRoute.routePoints[1].point.latitude - currentRoute.routePoints[0].point.latitude,
+        currentRoute.routePoints[currentRoute.startIndex + 1].point.longitude -
+            currentRoute.routePoints[currentRoute.startIndex].point.longitude,
+        currentRoute.routePoints[currentRoute.startIndex + 1].point.latitude -
+            currentRoute.routePoints[currentRoute.startIndex].point.latitude,
       )
           : 0.0;
       _directionNotifier.value = initialDirection;
       _saveDirectionNotifier.value = initialDirection;
       setState(() {
         _isAnimating = false;
+        _selectingStart = false;
+        _selectingEnd = false;
       });
-    } else if (_isAnimating) {
-      _animationController.stop();
-      _animationController.reset();
-      _circlePositionNotifier.value = currentRoute.routePoints.first.point;
-      _markerSizeNotifier.value = 0.0;
-      double initialDirection = currentRoute.routePoints.length > 1
-          ? atan2(
-        currentRoute.routePoints[1].point.longitude - currentRoute.routePoints[0].point.longitude,
-        currentRoute.routePoints[1].point.latitude - currentRoute.routePoints[0].point.latitude,
-      )
-          : 0.0;
-      _directionNotifier.value = initialDirection;
-      _saveDirectionNotifier.value = initialDirection;
-      setState(() {
-        _isAnimating = false;
-      });
-    } else {
+    } else if (currentRoute.routePoints.isNotEmpty) {
       setState(() {
         _isAnimating = true;
+        _selectingStart = false;
+        _selectingEnd = false;
       });
       _animateMarker();
     }
   }
 
-  void _selectStartPoint() {
-    if (currentRoute.routePoints.isNotEmpty) {
-      setState(() {
-        _startMarkerIndex = (_startMarkerIndex + 1) % currentRoute.routePoints.length;
-      });
-    }
+  void _startSelectingStartPoint() {
+    setState(() {
+      if (_selectingStart) {
+        _selectingStart = false; // Cancel if already active
+      } else {
+        _selectingStart = true;
+        _selectingEnd = false; // Deactivate end selection
+      }
+    });
   }
 
-  void _selectEndPoint() {
-    if (currentRoute.routePoints.isNotEmpty) {
-      setState(() {
-        _endMarkerIndex = (_endMarkerIndex + 1) % currentRoute.routePoints.length;
-      });
+  void _startSelectingEndPoint() {
+    setState(() {
+      if (_selectingEnd) {
+        _selectingEnd = false; // Cancel if already active
+      } else {
+        _selectingEnd = true;
+        _selectingStart = false; // Deactivate start selection
+      }
+    });
+  }
+
+  void _handleMapTap(TapPosition tapPosition, LatLng tappedPoint) {
+    if (currentRoute.routePoints.isEmpty || _isSavingNotifier.value || _isAnimating || (!_selectingStart && !_selectingEnd)) return;
+
+    // Find closest route point within 50m
+    int closestIndex = 0;
+    double minDistance = double.infinity;
+    for (int i = 0; i < currentRoute.routePoints.length; i++) {
+      double distance = Geolocator.distanceBetween(
+        tappedPoint.latitude,
+        tappedPoint.longitude,
+        currentRoute.routePoints[i].point.latitude,
+        currentRoute.routePoints[i].point.longitude,
+      );
+      if (distance < minDistance && distance < 50) {
+        minDistance = distance;
+        closestIndex = i;
+      }
     }
+
+    // Verify tap is close enough
+    if (minDistance >= 50) return;
+
+    setState(() {
+      if (_selectingStart) {
+        // Only set start if before endIndex
+        if (closestIndex < currentRoute.endIndex) {
+          currentRoute.startIndex = closestIndex;
+          _totalDistance = calculateTotalDistance(
+            currentRoute,
+            startIndex: currentRoute.startIndex,
+            endIndex: currentRoute.endIndex,
+          );
+          _setInitialCirclePosition();
+          currentRoute.save();
+          _selectingStart = false;
+        }
+      } else if (_selectingEnd) {
+        // Only set end if after startIndex
+        if (closestIndex > currentRoute.startIndex) {
+          currentRoute.endIndex = closestIndex;
+          _totalDistance = calculateTotalDistance(
+            currentRoute,
+            startIndex: currentRoute.startIndex,
+            endIndex: currentRoute.endIndex,
+          );
+          currentRoute.save();
+          _selectingEnd = false;
+        }
+      }
+    });
   }
 
   void _animateMarker() {
-    if (_isAnimating) {
-      _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(
-          parent: _animationController,
-          curve: Curves.linear,
-        ),
+    if (!_isAnimating || currentRoute.routePoints.isEmpty) return;
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.linear,
+      ),
+    );
+
+    _markerSizeNotifier.value = markerBaseSize;
+    LatLng? lastPosition;
+    _progressAnimation.addListener(() {
+      print("Animation progress: ${_progressAnimation.value}, start: ${currentRoute.startIndex}, end: ${currentRoute.endIndex}, pos: ${_circlePositionNotifier.value}");
+      moveCircleAlongPath(
+        _progressAnimation.value,
+        currentRoute,
+        _circlePositionNotifier,
+        _totalDistance,
+        startIndex: currentRoute.startIndex,
+        endIndex: currentRoute.endIndex,
       );
+      LatLng currentPosition = _circlePositionNotifier.value;
+      if (lastPosition != null) {
+        double deltaLat = currentPosition.latitude - lastPosition!.latitude;
+        double deltaLng = currentPosition.longitude - lastPosition!.longitude;
+        _directionNotifier.value = atan2(deltaLng, deltaLat);
+      }
+      lastPosition = currentPosition;
+    });
 
-      _markerSizeNotifier.value = markerBaseSize;
-      LatLng? lastPosition;
-      _progressAnimation.addListener(() {
-        moveCircleAlongPath(_progressAnimation.value, currentRoute, _circlePositionNotifier, _totalDistance);
-        LatLng currentPosition = _circlePositionNotifier.value;
-        if (lastPosition != null) {
-          double deltaLat = currentPosition.latitude - lastPosition!.latitude;
-          double deltaLng = currentPosition.longitude - lastPosition!.longitude;
-          _directionNotifier.value = atan2(deltaLng, deltaLat);
-        }
-        lastPosition = currentPosition;
+    _animationController.reset();
+    _animationController.forward().then((_) {
+      _markerSizeNotifier.value = 0.0;
+      if (currentRoute.endIndex > currentRoute.startIndex && currentRoute.endIndex < currentRoute.routePoints.length) {
+        LatLng secondLast = currentRoute.routePoints[currentRoute.endIndex - 1].point;
+        LatLng last = currentRoute.routePoints[currentRoute.endIndex].point;
+        _directionNotifier.value = atan2(
+          last.longitude - secondLast.longitude,
+          last.latitude - secondLast.latitude,
+        );
+      } else {
+        _directionNotifier.value = 0.0;
+      }
+      setState(() {
+        _isAnimating = false;
       });
-
-      _animationController.reset();
-      _animationController.forward().then((_) {
-        _markerSizeNotifier.value = 0.0;
-        if (currentRoute.routePoints.length > 1) {
-          LatLng secondLast = currentRoute.routePoints[currentRoute.routePoints.length - 2].point;
-          LatLng last = currentRoute.routePoints.last.point;
-          _directionNotifier.value = atan2(
-            last.longitude - secondLast.longitude,
-            last.latitude - secondLast.latitude,
-          );
-        } else {
-          _directionNotifier.value = 0.0;
-        }
-        setState(() {
-          _isAnimating = false;
-        });
-      });
-    }
+    });
   }
 
   @override
@@ -290,7 +385,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: FlutterMap(
-                          key: ValueKey(_selectedAspectRatio), // Force rebuild on ratio change
+                          key: ValueKey(_selectedAspectRatio),
                           mapController: _mapController,
                           options: MapOptions(
                             initialCenter: mapPosition,
@@ -303,6 +398,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 });
                               }
                             },
+                            onTap: _handleMapTap,
                             interactionOptions: _isSavingNotifier.value
                                 ? const InteractionOptions(flags: InteractiveFlag.none)
                                 : const InteractionOptions(
@@ -327,17 +423,24 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               ),
                             MarkerLayer(
                               markers: currentRoute.routePoints.map((routePoint) {
+                                int index = currentRoute.routePoints.indexOf(routePoint);
                                 return Marker(
                                   point: routePoint.point,
                                   width: 25.0,
                                   height: 25.0,
-                                  child: Icon(
-                                    Icons.circle,
-                                    color: currentRoute.routePoints.indexOf(routePoint) ==
-                                        _currentMarkerIndex
-                                        ? Colors.green.withValues(alpha: 0.5)
-                                        : Colors.blue,
-                                    size: 15.0,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      _handleMarkerTap(index);
+                                    },
+                                    child: Icon(
+                                      Icons.circle,
+                                      color: index == currentRoute.startIndex
+                                          ? const Color(0xFF4c8d40) // Green for start
+                                          : index == currentRoute.endIndex
+                                          ? const Color(0xFFde3a71) // Red for end
+                                          : Colors.blue, // Default
+                                      size: 15.0,
+                                    ),
                                   ),
                                 );
                               }).toList(),
@@ -434,8 +537,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 left: 10.0,
                 right: 10.0,
                 child: Material(
-                  color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white)
-                      .withValues(alpha: 0.8),
+                  color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
                   child: Stack(
                     children: [
                       Container(
@@ -453,11 +555,21 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   ElevatedButton(
-                                    onPressed: _isSavingNotifier.value ? null : () => _selectStartPoint(),
+                                    onPressed: _isSavingNotifier.value || _isAnimating
+                                        ? null
+                                        : _startSelectingStartPoint,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _selectingStart ? Colors.green[100] : null,
+                                    ),
                                     child: const Text("Set Start Point"),
                                   ),
                                   ElevatedButton(
-                                    onPressed: _isSavingNotifier.value ? null : () => _selectEndPoint(),
+                                    onPressed: _isSavingNotifier.value || _isAnimating
+                                        ? null
+                                        : _startSelectingEndPoint,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _selectingEnd ? Colors.red[100] : null,
+                                    ),
                                     child: const Text("Set End Point"),
                                   ),
                                 ],
@@ -510,6 +622,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     ? null
                                     : (value) {
                                   setState(() {
+                                    _selectingStart = false;
+                                    _selectingEnd = false;
                                     _selectedAspectRatio = value!;
                                   });
                                   WidgetsBinding.instance.addPostFrameCallback((_) {

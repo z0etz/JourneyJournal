@@ -11,9 +11,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
 
-double calculateTotalDistance(RouteModel route) {
+double calculateTotalDistance(RouteModel route, {int startIndex = 0, int endIndex = -1}) {
+  if (route.routePoints.isEmpty) return 0.0;
+  int effectiveEndIndex = endIndex == -1 ? route.routePoints.length - 1 : endIndex;
+  effectiveEndIndex = effectiveEndIndex.clamp(startIndex, route.routePoints.length - 1);
+  if (effectiveEndIndex <= startIndex) return 0.0;
   double totalDistance = 0.0;
-  for (int i = 0; i < route.routePoints.length - 1; i++) {
+  for (int i = startIndex; i < effectiveEndIndex; i++) {
     totalDistance += Geolocator.distanceBetween(
       route.routePoints[i].point.latitude,
       route.routePoints[i].point.longitude,
@@ -21,6 +25,7 @@ double calculateTotalDistance(RouteModel route) {
       route.routePoints[i + 1].point.longitude,
     );
   }
+  print("Total distance: $totalDistance, start: $startIndex, end: $effectiveEndIndex");
   return totalDistance;
 }
 
@@ -28,15 +33,29 @@ void moveCircleAlongPath(
     double progress,
     RouteModel route,
     ValueNotifier<LatLng> circlePositionNotifier,
-    double totalDistance,
-    ) {
-  List<LatLng> path = route.routePoints.map((point) => point.point).toList();
+    double totalDistance, {
+      int startIndex = 0,
+      int endIndex = -1,
+    }) {
+  if (route.routePoints.isEmpty) return;
+  int effectiveEndIndex = endIndex == -1 ? route.routePoints.length - 1 : endIndex;
+  effectiveEndIndex = effectiveEndIndex.clamp(startIndex, route.routePoints.length - 1);
+  if (effectiveEndIndex < startIndex) effectiveEndIndex = startIndex;
+  List<LatLng> path = route.routePoints
+      .sublist(startIndex, effectiveEndIndex + 1)
+      .map((point) => point.point)
+      .toList();
   if (path.isEmpty) return;
+
+  if (path.length == 1) {
+    circlePositionNotifier.value = path.first;
+    return;
+  }
 
   double distanceCovered = progress * totalDistance;
   double distanceSoFar = 0.0;
-  int startIndex = 0;
-  int endIndex = 1;
+  int segmentStartIndex = 0;
+  int segmentEndIndex = 1;
 
   for (int i = 0; i < path.length - 1; i++) {
     double segmentDistance = Geolocator.distanceBetween(
@@ -45,17 +64,16 @@ void moveCircleAlongPath(
       path[i + 1].latitude,
       path[i + 1].longitude,
     );
-    distanceSoFar += segmentDistance;
-
-    if (distanceSoFar >= distanceCovered) {
-      startIndex = i;
-      endIndex = i + 1;
+    if (distanceSoFar + segmentDistance >= distanceCovered) {
+      segmentStartIndex = i;
+      segmentEndIndex = i + 1;
       break;
     }
+    distanceSoFar += segmentDistance;
   }
 
-  LatLng startPoint = path[startIndex];
-  LatLng endPoint = path[endIndex];
+  LatLng startPoint = path[segmentStartIndex];
+  LatLng endPoint = path[segmentEndIndex];
   double segmentDistance = Geolocator.distanceBetween(
     startPoint.latitude,
     startPoint.longitude,
@@ -69,7 +87,10 @@ void moveCircleAlongPath(
   double lng = startPoint.longitude + (endPoint.longitude - startPoint.longitude) * ratio;
 
   circlePositionNotifier.value = LatLng(lat, lng);
+  print("MoveCircle: progress=$progress, pos=($lat,$lng), segment=$segmentStartIndex-$segmentEndIndex");
 }
+
+// ... (SaveButton unchanged for now)
 
 class SaveButton extends StatefulWidget {
   final GlobalKey mapKey;
@@ -117,7 +138,11 @@ class _SaveButtonState extends State<SaveButton> {
   @override
   void initState() {
     super.initState();
-    _totalDistance = calculateTotalDistance(widget.currentRoute);
+    _totalDistance = calculateTotalDistance(
+      widget.currentRoute,
+      startIndex: widget.currentRoute.startIndex,
+      endIndex: widget.currentRoute.endIndex,
+    );
   }
 
   Size _getPixelDimensions() {
@@ -206,7 +231,7 @@ class _SaveButtonState extends State<SaveButton> {
   }
 
   Future<void> _saveAnimation() async {
-    if (widget.isSavingNotifier.value) return;
+    if (widget.isSavingNotifier.value || widget.currentRoute.routePoints.isEmpty) return;
 
     widget.onSaveStart?.call();
 
@@ -216,24 +241,26 @@ class _SaveButtonState extends State<SaveButton> {
     const int zoomFrames = 45;
     final int followFrames = totalFrames - 2 * zoomFrames;
     LatLng? fittedCenter;
-    final LatLng startPoint = widget.currentRoute.routePoints.first.point;
-    final LatLng endPoint = widget.currentRoute.routePoints.last.point;
+    final LatLng startPoint = widget.currentRoute.routePoints[widget.currentRoute.startIndex].point;
+    final LatLng endPoint = widget.currentRoute.routePoints[widget.currentRoute.endIndex].point;
     final double fitZoom = widget.fitZoom;
     final double initialZoom = widget.initialZoom;
     const double markerBaseSize = 25.0;
 
-    double initialDirection = widget.currentRoute.routePoints.length > 1
+    double initialDirection = widget.currentRoute.startIndex < widget.currentRoute.endIndex
         ? atan2(
-      widget.currentRoute.routePoints[1].point.longitude - startPoint.longitude,
-      widget.currentRoute.routePoints[1].point.latitude - startPoint.latitude,
+      widget.currentRoute.routePoints[widget.currentRoute.startIndex + 1].point.longitude -
+          startPoint.longitude,
+      widget.currentRoute.routePoints[widget.currentRoute.startIndex + 1].point.latitude -
+          startPoint.latitude,
     )
         : 0.0;
-    double finalDirection = widget.currentRoute.routePoints.length > 1
+    double finalDirection = widget.currentRoute.endIndex > widget.currentRoute.startIndex
         ? atan2(
       endPoint.longitude -
-          widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.longitude,
+          widget.currentRoute.routePoints[widget.currentRoute.endIndex - 1].point.longitude,
       endPoint.latitude -
-          widget.currentRoute.routePoints[widget.currentRoute.routePoints.length - 2].point.latitude,
+          widget.currentRoute.routePoints[widget.currentRoute.endIndex - 1].point.latitude,
     )
         : 0.0;
 
@@ -267,7 +294,14 @@ class _SaveButtonState extends State<SaveButton> {
       }
 
       widget.animationController.value = progress;
-      moveCircleAlongPath(progress, widget.currentRoute, widget.circlePositionNotifier, _totalDistance);
+      moveCircleAlongPath(
+        progress,
+        widget.currentRoute,
+        widget.circlePositionNotifier,
+        _totalDistance,
+        startIndex: widget.currentRoute.startIndex,
+        endIndex: widget.currentRoute.endIndex,
+      );
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
       if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
@@ -297,9 +331,11 @@ class _SaveButtonState extends State<SaveButton> {
 
       if (!routeFits) {
         if (frame == 0) {
-          fitMapToRoute(widget.mapController,
-              widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
-              isAnimationScreen: true);
+          fitMapToRoute(
+            widget.mapController,
+            widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
+            isAnimationScreen: true,
+          );
           fittedCenter = widget.mapController.camera.center;
         }
 
@@ -365,7 +401,8 @@ class _SaveButtonState extends State<SaveButton> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Video saved at: $videoPath')));
+          SnackBar(content: Text('Video saved at: $videoPath')),
+        );
       }
     } else {
       widget.onSaveComplete?.call();
@@ -378,7 +415,7 @@ class _SaveButtonState extends State<SaveButton> {
       valueListenable: widget.isSavingNotifier,
       builder: (context, isSaving, child) {
         return ElevatedButton(
-          onPressed: isSaving ? null : _saveAnimation,
+          onPressed: isSaving || widget.currentRoute.routePoints.isEmpty ? null : _saveAnimation,
           child: isSaving
               ? const SizedBox(
             width: 24,

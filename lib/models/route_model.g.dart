@@ -20,19 +20,25 @@ class RouteModelAdapter extends TypeAdapter<RouteModel> {
       id: fields[0] as String,
       name: fields[1] as String,
       routePoints: (fields[2] as List?)?.cast<RoutePoint>(),
+      startIndex: fields[3] as int,
+      endIndex: fields[4] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, RouteModel obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.name)
       ..writeByte(2)
-      ..write(obj.routePoints);
+      ..write(obj.routePoints)
+      ..writeByte(3)
+      ..write(obj.startIndex)
+      ..writeByte(4)
+      ..write(obj.endIndex);
   }
 
   @override
