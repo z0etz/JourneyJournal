@@ -85,7 +85,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     }
 
     if (currentRoute.routePoints.isNotEmpty) {
-      Future.delayed(const Duration(milliseconds: 50), _fitMapToRoute);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fitMapToRoute();
+      });
     }
 
     setState(() {});
@@ -93,14 +95,25 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _fitMapToRoute() {
-    fitMapToRoute(_mapController, currentRoute.routePoints.map((rp) => rp.point).toList(), isAnimationScreen: true);
-    setState(() {
-      fitZoom = _mapController.camera.zoom;
-      mapPosition = _mapController.camera.center;
+    if (currentRoute.routePoints.isEmpty) return;
+    fitMapToRoute(
+      _mapController,
+      currentRoute.routePoints.map((rp) => rp.point).toList(),
+      isAnimationScreen: true,
+    );
+    // Double post-frame to ensure camera sync
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {
+          fitZoom = _mapController.camera.zoom;
+          zoomLevel = _mapController.camera.zoom; // Reset initialZoom
+          mapPosition = _mapController.camera.center;
+        });
+        if (currentRoute.routePoints.isNotEmpty) {
+          _setInitialCirclePosition();
+        }
+      });
     });
-    if (currentRoute.routePoints.isNotEmpty) {
-      _setInitialCirclePosition();
-    }
   }
 
   void _setInitialCirclePosition() {
@@ -277,6 +290,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: FlutterMap(
+                          key: ValueKey(_selectedAspectRatio), // Force rebuild on ratio change
                           mapController: _mapController,
                           options: MapOptions(
                             initialCenter: mapPosition,
@@ -328,7 +342,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 );
                               }).toList(),
                             ),
-                            // Preview MarkerLayer (visible when not saving)
                             ValueListenableBuilder<bool>(
                               valueListenable: _isSavingNotifier,
                               builder: (context, isSaving, child) {
@@ -368,7 +381,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 );
                               },
                             ),
-                            // Save MarkerLayer (visible when saving)
                             ValueListenableBuilder<bool>(
                               valueListenable: _isSavingNotifier,
                               builder: (context, isSaving, child) {
@@ -499,6 +511,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     : (value) {
                                   setState(() {
                                     _selectedAspectRatio = value!;
+                                  });
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    _fitMapToRoute();
                                   });
                                 },
                               ),
