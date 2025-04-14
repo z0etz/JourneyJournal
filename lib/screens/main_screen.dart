@@ -23,7 +23,6 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     if (widget.initialRoute != null) {
-      print("MainScreen init with route: ${widget.initialRoute?.name}");
       lastViewedRoute = widget.initialRoute;
       _selectedIndex = 0;
     }
@@ -64,7 +63,7 @@ class _MainScreenState extends State<MainScreen> {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.3), // Moved color here
+                  color: Colors.grey.withOpacity(0.3),
                   boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
@@ -89,17 +88,13 @@ class _MainScreenState extends State<MainScreen> {
         if (widget.initialRoute != null) {
           displayRoute = widget.initialRoute;
           lastViewedRoute = displayRoute;
-          print("Using clicked route: ${displayRoute?.name}");
         } else if (lastViewedRoute != null) {
           displayRoute = lastViewedRoute;
-          print("Using last viewed route: ${displayRoute?.name}");
         } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
           displayRoute = snapshot.data!.last;
           lastViewedRoute = displayRoute;
-          print("Using last saved route: ${displayRoute?.name}");
         } else {
           displayRoute = null;
-          print("No routes exist");
         }
 
         switch (_selectedIndex) {

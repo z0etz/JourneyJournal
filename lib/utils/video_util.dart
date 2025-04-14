@@ -83,11 +83,12 @@ class SaveButton extends StatefulWidget {
   final double fitZoom;
   final ValueNotifier<double> markerSizeNotifier;
   final ValueNotifier<double> directionNotifier;
-  final VoidCallback onSaveStart;
-  final VoidCallback onSaveComplete;
-  final ValueNotifier<bool> isSavingNotifier; // Added parameter
+  final ValueNotifier<double> saveDirectionNotifier;
+  final VoidCallback? onSaveStart;
+  final VoidCallback? onSaveComplete;
+  final ValueNotifier<bool> isSavingNotifier;
 
-  const SaveButton({ // Updated constructor
+  const SaveButton({
     required this.mapKey,
     required this.frameCount,
     required this.animationController,
@@ -99,6 +100,7 @@ class SaveButton extends StatefulWidget {
     required this.fitZoom,
     required this.markerSizeNotifier,
     required this.directionNotifier,
+    required this.saveDirectionNotifier,
     required this.onSaveStart,
     required this.onSaveComplete,
     required this.isSavingNotifier,
@@ -116,7 +118,6 @@ class _SaveButtonState extends State<SaveButton> {
   void initState() {
     super.initState();
     _totalDistance = calculateTotalDistance(widget.currentRoute);
-    print("SaveButton initialized, totalDistance: $_totalDistance");
   }
 
   Size _getPixelDimensions() {
@@ -147,16 +148,10 @@ class _SaveButtonState extends State<SaveButton> {
 
   Future<String> _captureFrame(int frameIndex) async {
     final BuildContext? context = widget.mapKey.currentContext;
-    if (context == null) {
-      print("No context available for frame: $frameIndex");
-      return '';
-    }
+    if (context == null) return '';
 
     RenderObject? renderObject = context.findRenderObject();
-    if (renderObject == null || renderObject is! RenderRepaintBoundary) {
-      print("No valid render object for frame: $frameIndex");
-      return '';
-    }
+    if (renderObject == null || renderObject is! RenderRepaintBoundary) return '';
     RenderRepaintBoundary boundary = renderObject;
 
     ui.Image image = await boundary.toImage(pixelRatio: 1.0);
@@ -176,29 +171,21 @@ class _SaveButtonState extends State<SaveButton> {
     );
 
     ByteData? byteData = await resizedImage.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) {
-      print("Failed to capture frame: $frameIndex (ByteData is null)");
-      return '';
-    }
+    if (byteData == null) return '';
 
     Uint8List pngBytes = byteData.buffer.asUint8List();
     final frameDir = await _getTempFrameDir();
     final framePath = '${frameDir.path}/frame_$frameIndex.png';
     await File(framePath).writeAsBytes(pngBytes);
-    print("Frame $frameIndex saved at: $framePath");
     return framePath;
   }
 
   Future<void> _encodeFrame(String framePath) async {
     ui.Image image = await decodeImageFromList(await File(framePath).readAsBytes());
     ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    if (byteData == null) {
-      print("Failed to convert frame to RGBA: $framePath");
-      return;
-    }
+    if (byteData == null) return;
     Uint8List rgbaBytes = byteData.buffer.asUint8List();
     await FlutterQuickVideoEncoder.appendVideoFrame(rgbaBytes);
-    print("Frame $framePath appended to video");
   }
 
   LatLng _interpolateCenter(LatLng start, LatLng end, double t) {
@@ -221,10 +208,7 @@ class _SaveButtonState extends State<SaveButton> {
   Future<void> _saveAnimation() async {
     if (widget.isSavingNotifier.value) return;
 
-    print("Save animation started");
-    widget.isSavingNotifier.value = true;
-    print("SaveButton isSavingNotifier set to true");
-    widget.onSaveStart();
+    widget.onSaveStart?.call();
 
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
@@ -238,7 +222,6 @@ class _SaveButtonState extends State<SaveButton> {
     final double initialZoom = widget.initialZoom;
     const double markerBaseSize = 25.0;
 
-    // Recalculate directions
     double initialDirection = widget.currentRoute.routePoints.length > 1
         ? atan2(
       widget.currentRoute.routePoints[1].point.longitude - startPoint.longitude,
@@ -254,36 +237,33 @@ class _SaveButtonState extends State<SaveButton> {
     )
         : 0.0;
 
-    // Full reset
-    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
-    widget.directionNotifier.value = initialDirection;
+    // Reset state
+    widget.markerSizeNotifier.value = 0.0;
+    widget.saveDirectionNotifier.value = initialDirection;
     widget.circlePositionNotifier.value = startPoint;
     widget.animationController.reset();
-    await Future.delayed(const Duration(milliseconds: 50)); // Allow UI to update
+    widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
+
     LatLng? lastPosition;
 
     for (int frame = 0; frame < totalFrames; frame++) {
       if (!widget.isSavingNotifier.value) {
-        print("Save cancelled at frame $frame");
-        widget.isSavingNotifier.value = false;
-        widget.onSaveComplete();
         final frameDir = await _getTempFrameDir();
         if (await frameDir.exists()) await frameDir.delete(recursive: true);
+        widget.onSaveComplete?.call();
         return;
       }
 
       double progress;
       if (frame < zoomFrames) {
         progress = 0.0;
-        widget.directionNotifier.value = initialDirection;
-        print("Frame $frame, direction: ${widget.directionNotifier.value}");
+        widget.saveDirectionNotifier.value = initialDirection;
       } else if (frame < zoomFrames + followFrames) {
         double followT = (frame - zoomFrames) / followFrames.toDouble();
         progress = followT.clamp(0.0, 1.0);
       } else {
         progress = 1.0;
-        widget.directionNotifier.value = finalDirection;
-        print("Frame $frame, direction: ${widget.directionNotifier.value}");
+        widget.saveDirectionNotifier.value = finalDirection;
       }
 
       widget.animationController.value = progress;
@@ -300,8 +280,7 @@ class _SaveButtonState extends State<SaveButton> {
           currentPoint.longitude,
         );
         if (distanceMoved > 1.0) {
-          widget.directionNotifier.value = atan2(deltaLng, deltaLat);
-          print("Frame $frame, direction: ${widget.directionNotifier.value}");
+          widget.saveDirectionNotifier.value = atan2(deltaLng, deltaLat);
         }
       }
       lastPosition = currentPoint;
@@ -321,7 +300,6 @@ class _SaveButtonState extends State<SaveButton> {
           fitMapToRoute(widget.mapController,
               widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
               isAnimationScreen: true);
-          await Future.delayed(const Duration(milliseconds: 100));
           fittedCenter = widget.mapController.camera.center;
         }
 
@@ -369,10 +347,8 @@ class _SaveButtonState extends State<SaveButton> {
 
       for (String framePath in framePaths) {
         if (!widget.isSavingNotifier.value) {
-          print("Save cancelled during encoding");
           await FlutterQuickVideoEncoder.finish();
-          widget.isSavingNotifier.value = false;
-          widget.onSaveComplete();
+          widget.onSaveComplete?.call();
           final frameDir = await _getTempFrameDir();
           if (await frameDir.exists()) await frameDir.delete(recursive: true);
           return;
@@ -381,26 +357,18 @@ class _SaveButtonState extends State<SaveButton> {
       }
 
       await FlutterQuickVideoEncoder.finish();
-      print("Video saved at: $videoPath");
 
       final frameDir = await _getTempFrameDir();
       await frameDir.delete(recursive: true);
 
-      widget.isSavingNotifier.value = false;
-      print("SaveButton isSavingNotifier set to false");
-      widget.onSaveComplete();
+      widget.onSaveComplete?.call();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Video saved at: $videoPath')));
-      } else {
-        print("SaveButton unmounted, skipping snackbar");
       }
     } else {
-      widget.isSavingNotifier.value = false;
-      print("SaveButton isSavingNotifier set to false (no frames)");
-      widget.onSaveComplete();
-      print("No frames captured, save completed without video");
+      widget.onSaveComplete?.call();
     }
   }
 
@@ -409,7 +377,6 @@ class _SaveButtonState extends State<SaveButton> {
     return ValueListenableBuilder<bool>(
       valueListenable: widget.isSavingNotifier,
       builder: (context, isSaving, child) {
-        print("SaveButton build, isSaving: $isSaving");
         return ElevatedButton(
           onPressed: isSaving ? null : _saveAnimation,
           child: isSaving
