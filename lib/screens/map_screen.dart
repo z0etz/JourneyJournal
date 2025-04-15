@@ -151,12 +151,13 @@ class _MapScreenState extends State<MapScreen> {
                 showRoutePointDialog(
                   context,
                   routePoint,
+                  currentRoute, // Pass routeModel
                   titleController: titleController,
                   descriptionController: descriptionController,
                   selectedDate: selectedDate,
                   onDelete: () => _deleteRoutePoint(routePoint),
                   onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate),
-                  availableTags: currentRoute.tags, // Pass route tags
+                  availableTags: currentRoute.tags,
                 ).then((_) {
                   setState(() {});
                 });
@@ -175,12 +176,13 @@ class _MapScreenState extends State<MapScreen> {
               showRoutePointDialog(
                 context,
                 routePoint,
+                currentRoute, // Pass routeModel
                 titleController: titleController,
                 descriptionController: descriptionController,
                 selectedDate: selectedDate,
                 onDelete: () => _deleteRoutePoint(routePoint),
                 onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate),
-                availableTags: currentRoute.tags, // Pass route tags
+                availableTags: currentRoute.tags,
               ).then((_) {
                 setState(() {});
               });
