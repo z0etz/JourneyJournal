@@ -58,17 +58,14 @@ void fitMapToRoute(
 
   LatLngBounds bounds = LatLngBounds.fromPoints(effectivePoints);
 
-  // Compute center of bounds
   LatLng center = LatLng(
     (bounds.north + bounds.south) / 2,
     (bounds.east + bounds.west) / 2,
   );
 
-  // Define padding (prevents points from being too close to screen edges)
   double padding = isAnimationScreen ? 50.0 : 100.0;
   double longitudeOffset = 0;
 
-  // Apply an offset to shift the center leftward (westward) for MapScreen
   if (!isAnimationScreen) {
     longitudeOffset = (bounds.east - bounds.west) * 0.375;
     padding = 150.0;
@@ -82,7 +79,6 @@ void fitMapToRoute(
     ),
   );
 
-  // Move to the adjusted center after fitting bounds (only for MapScreen)
   if (!isAnimationScreen) {
     mapController.move(adjustedCenter, mapController.camera.zoom);
   }
@@ -114,8 +110,8 @@ Future<void> showImageTagDialog(
                       onDeleted: () {
                         setDialogState(() {
                           image.tags.remove(tag);
+                          routeModel.save();
                         });
-                        routeModel.save(); // Update RouteModel.tags
                       },
                     )).toList(),
                   ),
@@ -131,8 +127,8 @@ Future<void> showImageTagDialog(
                       onSelected: (_) {
                         setDialogState(() {
                           image.tags.add(tag);
+                          routeModel.save();
                         });
-                        routeModel.save(); // Update RouteModel.tags
                       },
                     ))
                         .toList(),
@@ -149,9 +145,9 @@ Future<void> showImageTagDialog(
                       if (newTag.isNotEmpty) {
                         setDialogState(() {
                           image.tags.add(newTag);
+                          routeModel.save();
+                          tagController.clear();
                         });
-                        routeModel.save(); // Update RouteModel.tags
-                        tagController.clear();
                       }
                     },
                   ),
@@ -172,9 +168,9 @@ Future<void> showImageTagDialog(
                       if (newTag.isNotEmpty) {
                         setDialogState(() {
                           image.tags.add(newTag);
+                          routeModel.save();
+                          tagController.clear();
                         });
-                        routeModel.save(); // Update RouteModel.tags
-                        tagController.clear();
                       }
                     },
                     child: const Text('Add'),
@@ -273,7 +269,7 @@ Future<void> showRoutePointDialog(
                             ));
                           });
                         }
-                        routeModel.save(); // Persist new images
+                        routeModel.save();
                       }
                     },
                     child: const Text(
@@ -325,7 +321,7 @@ Future<void> showRoutePointDialog(
                                         routeModel,
                                         availableTags: routeModel.tags,
                                       ).then((_) {
-                                        setDialogState(() {}); // Refresh dialog
+                                        setDialogState(() {});
                                       });
                                     },
                                     child: Image.file(
