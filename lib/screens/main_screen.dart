@@ -23,7 +23,6 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     if (widget.initialRoute != null) {
-      print("MainScreen init with route: ${widget.initialRoute?.name}");
       lastViewedRoute = widget.initialRoute;
       _selectedIndex = 0;
     }
@@ -64,7 +63,7 @@ class _MainScreenState extends State<MainScreen> {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.3), // Moved color here
+                  color: Colors.grey.withValues(alpha: 0.3),
                   boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
@@ -84,22 +83,36 @@ class _MainScreenState extends State<MainScreen> {
     return FutureBuilder<List<RouteModel>>(
       future: RouteModel.loadRoutes(),
       builder: (context, snapshot) {
-        RouteModel? displayRoute;
+        if (!snapshot.hasData) {
+          // Show a loading state while waiting for routes
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        List<RouteModel> savedRoutes = snapshot.data!;
+        RouteModel displayRoute;
 
         if (widget.initialRoute != null) {
-          displayRoute = widget.initialRoute;
+          displayRoute = widget.initialRoute!;
           lastViewedRoute = displayRoute;
-          print("Using clicked route: ${displayRoute?.name}");
+          print("MainScreen: Using initialRoute=${displayRoute.name}");
         } else if (lastViewedRoute != null) {
-          displayRoute = lastViewedRoute;
-          print("Using last viewed route: ${displayRoute?.name}");
-        } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-          displayRoute = snapshot.data!.last;
+          displayRoute = lastViewedRoute!;
+          print("MainScreen: Using lastViewedRoute=${displayRoute.name}");
+        } else if (savedRoutes.isNotEmpty) {
+          displayRoute = savedRoutes.last;
           lastViewedRoute = displayRoute;
-          print("Using last saved route: ${displayRoute?.name}");
+          print("MainScreen: Using last saved route=${displayRoute.name}");
         } else {
-          displayRoute = null;
-          print("No routes exist");
+          displayRoute = RouteModel(
+            id: DateTime
+                .now()
+                .millisecondsSinceEpoch
+                .toString(),
+            name: RouteModel.getNewRouteName([]),
+          );
+          lastViewedRoute = displayRoute;
+          displayRoute.save();
+          print("MainScreen: Created new route=${displayRoute.name}");
         }
 
         switch (_selectedIndex) {

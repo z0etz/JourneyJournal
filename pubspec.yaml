@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   path: ^1.8.3
+  uuid: ^4.0.0
 
   # Flutter Map package for route visualization
   flutter_map: ^8.0.0

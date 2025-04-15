@@ -1,7 +1,7 @@
 import 'package:hive/hive.dart';
 import 'package:journeyjournal/models/route_point.dart';
 
-part 'route_model.g.dart'; // This will be generated
+part 'route_model.g.dart';
 
 @HiveType(typeId: 1)
 class RouteModel {
@@ -12,20 +12,39 @@ class RouteModel {
   String name;
 
   @HiveField(2)
-  List<RoutePoint> routePoints = [];
+  List<RoutePoint> routePoints;
+
+  @HiveField(3)
+  String startPointId;
+
+  @HiveField(4)
+  String endPointId;
+
+  @HiveField(5)
+  bool snapStartToFirst;
+
+  @HiveField(6)
+  bool snapEndToLast;
 
   RouteModel({
     required this.id,
     required this.name,
     List<RoutePoint>? routePoints,
-  }) : routePoints = routePoints ?? [];
+    String? startPointId,
+    String? endPointId,
+    this.snapStartToFirst = true,
+    this.snapEndToLast = true,
+  })  : routePoints = routePoints ?? [],
+        startPointId = startPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.first.id : ''),
+        endPointId = endPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.last.id : '');
 
-  // Static method to get the box of routes
+  int get startIndex => routePoints.indexWhere((p) => p.id == startPointId);
+  int get endIndex => routePoints.indexWhere((p) => p.id == endPointId);
+
   static Future<Box<RouteModel>> getRoutesBox() async {
     return await Hive.openBox<RouteModel>('routesBox');
   }
 
-  // Method to generate a unique route name
   static String getNewRouteName(List<RouteModel> savedRoutes) {
     List<int> usedNumbers = [];
     for (var route in savedRoutes) {
@@ -44,31 +63,125 @@ class RouteModel {
     return 'Route $nextAvailableNumber';
   }
 
-  // Save method to update or add a new route in the Hive box
   Future<void> save() async {
     final box = await RouteModel.getRoutesBox();
-    box.put(id, this);
+    if (routePoints.isNotEmpty) {
+      // Handle snapping for start point
+      if (snapStartToFirst || startPointId.isEmpty || !routePoints.any((p) => p.id == startPointId)) {
+        startPointId = routePoints.first.id;
+        snapStartToFirst = true;
+      } else if (startPointId == routePoints.first.id) {
+        snapStartToFirst = true;
+      }
+      // Handle snapping for end point
+      if (snapEndToLast || endPointId.isEmpty || !routePoints.any((p) => p.id == endPointId)) {
+        endPointId = routePoints.last.id;
+        snapEndToLast = true;
+      } else if (endPointId == routePoints.last.id) {
+        snapEndToLast = true;
+      }
+    } else {
+      startPointId = '';
+      endPointId = '';
+      snapStartToFirst = true;
+      snapEndToLast = true;
+    }
+    await box.put(id, this);
   }
 
-  // Method to create and save a new route in the Hive box
+  void setStartPointId(String newId) {
+    startPointId = newId;
+    snapStartToFirst = routePoints.isNotEmpty && newId == routePoints.first.id;
+    save();
+  }
+
+  void setEndPointId(String newId) {
+    endPointId = newId;
+    snapEndToLast = routePoints.isNotEmpty && newId == routePoints.last.id;
+    save();
+  }
+
   static Future<RouteModel> createNewRoute() async {
     final box = await RouteModel.getRoutesBox();
     String routeName = getNewRouteName(box.values.toList());
-    String routeId = DateTime.now().millisecondsSinceEpoch.toString(); // Unique ID based on timestamp
-    RouteModel newRoute = RouteModel(id: routeId, name: routeName, routePoints: []);
-    await box.put(newRoute.id, newRoute); // Save to the box
+    String routeId = DateTime.now().millisecondsSinceEpoch.toString();
+    RouteModel newRoute = RouteModel(id: routeId, name: routeName);
+    await box.put(newRoute.id, newRoute);
     return newRoute;
   }
 
-  // Load all routes from Hive
   static Future<List<RouteModel>> loadRoutes() async {
     final box = await RouteModel.getRoutesBox();
-    return box.values.toList(); // Get all routes from the box
+    for (var route in box.values) {
+      bool needsSave = false;
+      if (route.routePoints.isNotEmpty) {
+        if (route.snapStartToFirst || route.startPointId.isEmpty || !route.routePoints.any((p) => p.id == route.startPointId)) {
+          route.startPointId = route.routePoints.first.id;
+          route.snapStartToFirst = true;
+          needsSave = true;
+        } else if (route.startPointId == route.routePoints.first.id) {
+          route.snapStartToFirst = true;
+          needsSave = true;
+        }
+        if (route.snapEndToLast || route.endPointId.isEmpty || !route.routePoints.any((p) => p.id == route.endPointId)) {
+          route.endPointId = route.routePoints.last.id;
+          route.snapEndToLast = true;
+          needsSave = true;
+        } else if (route.endPointId == route.routePoints.last.id) {
+          route.snapEndToLast = true;
+          needsSave = true;
+        }
+      } else {
+        if (route.startPointId.isNotEmpty || route.endPointId.isNotEmpty) {
+          route.startPointId = '';
+          route.endPointId = '';
+          route.snapStartToFirst = true;
+          route.snapEndToLast = true;
+          needsSave = true;
+        }
+      }
+      if (needsSave) {
+        await route.save();
+      }
+    }
+    return box.values.toList();
   }
 
-  // Load a specific route from Hive by ID
   static Future<RouteModel?> loadRouteById(String id) async {
     final box = await RouteModel.getRoutesBox();
-    return box.get(id);
+    var route = box.get(id);
+    if (route != null) {
+      bool needsSave = false;
+      if (route.routePoints.isNotEmpty) {
+        if (route.snapStartToFirst || route.startPointId.isEmpty || !route.routePoints.any((p) => p.id == route.startPointId)) {
+          route.startPointId = route.routePoints.first.id;
+          route.snapStartToFirst = true;
+          needsSave = true;
+        } else if (route.startPointId == route.routePoints.first.id) {
+          route.snapStartToFirst = true;
+          needsSave = true;
+        }
+        if (route.snapEndToLast || route.endPointId.isEmpty || !route.routePoints.any((p) => p.id == route.endPointId)) {
+          route.endPointId = route.routePoints.last.id;
+          route.snapEndToLast = true;
+          needsSave = true;
+        } else if (route.endPointId == route.routePoints.last.id) {
+          route.snapEndToLast = true;
+          needsSave = true;
+        }
+      } else {
+        if (route.startPointId.isNotEmpty || route.endPointId.isNotEmpty) {
+          route.startPointId = '';
+          route.endPointId = '';
+          route.snapStartToFirst = true;
+          route.snapEndToLast = true;
+          needsSave = true;
+        }
+      }
+      if (needsSave) {
+        await route.save();
+      }
+    }
+    return route;
   }
 }

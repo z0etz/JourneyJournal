@@ -21,13 +21,14 @@ class RoutePointAdapter extends TypeAdapter<RoutePoint> {
       description: fields[2] as String,
       images: (fields[3] as List).cast<String>(),
       date: fields[4] as DateTime?,
+      id: fields[5] as String,
     ).._point = (fields[0] as List).cast<double>();
   }
 
   @override
   void write(BinaryWriter writer, RoutePoint obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj._point)
       ..writeByte(1)
@@ -37,7 +38,9 @@ class RoutePointAdapter extends TypeAdapter<RoutePoint> {
       ..writeByte(3)
       ..write(obj.images)
       ..writeByte(4)
-      ..write(obj.date);
+      ..write(obj.date)
+      ..writeByte(5)
+      ..write(obj.id);
   }
 
   @override
