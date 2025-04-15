@@ -207,22 +207,22 @@ class _MapScreenState extends State<MapScreen> {
                 // Title (closer to circle)
                 if (routePoint.title.isNotEmpty)
                   Positioned(
-                    bottom: 1,
+                    bottom: 5,
                     // Reduce this value to move the title further down the circle
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 3, vertical: 1),
+                          horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.8),
+                        color: Colors.white.withValues(alpha: 0.9),
                         // Semi-transparent background
-                        borderRadius: BorderRadius.circular(
-                            8), // Rounded edges for a softer look
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.black54, width: 1),
                       ),
                       child: Text(
                         routePoint.title,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: 10,
                           color: Colors.black,
                         ),
                         overflow: TextOverflow.ellipsis,

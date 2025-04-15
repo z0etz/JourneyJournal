@@ -47,7 +47,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
-  final Duration _animationDuration = const Duration(seconds: 15);
+  final Duration _animationDuration = const Duration(seconds: 5);
   double _totalDistance = 0.0;
   static const double markerBaseSize = 25.0;
 
@@ -360,8 +360,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       markers.add(
         Marker(
           point: routePoint.point,
-          width: 25.0,
-          height: 25.0,
+          width: 150.0,
+          height: 50.0,
           child: GestureDetector(
             onTap: () {
               if (_isSavingNotifier.value || _isAnimating) return;
@@ -370,27 +370,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
             child: Stack(
               alignment: Alignment.center,
               children: [
-                if (_showRouteTitles && routePoint.title.isNotEmpty)
-                  Positioned(
-                    bottom: 1,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        routePoint.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: Colors.black,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ),
                 Icon(
                   Icons.circle,
                   color: i == startIndex
@@ -400,6 +379,30 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       : Colors.blue,
                   size: 15.0,
                 ),
+                if (_showRouteTitles && routePoint.title.isNotEmpty)
+                  Positioned(
+                    top: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.black54, width: 1),
+                      ),
+                      constraints: const BoxConstraints(maxWidth: 150),
+                      child: Text(
+                        routePoint.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                          color: Colors.black,
+                        ),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -420,15 +423,15 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         : currentRoute.routePoints.map((rp) => rp.point).toList();
 
     return [
-    PolylineLayer(
-    polylines: [
-    Polyline(
-    points: effectivePoints,
-    color: Colors.blue,
-    strokeWidth: 4.0,
-    ),
-    ],
-    ),
+      PolylineLayer(
+        polylines: [
+          Polyline(
+            points: effectivePoints,
+            color: Colors.blue,
+            strokeWidth: 4.0,
+          ),
+        ],
+      ),
     ];
   }
 
@@ -679,7 +682,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text("Show Route Point Titles"),
+                                  const Text("Show routepoint titles"),
                                   Switch(
                                     value: _showRouteTitles,
                                     onChanged: _isSavingNotifier.value
@@ -695,7 +698,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text("Show Whole Route"),
+                                  const Text("Zoom to whole route"),
                                   Switch(
                                     value: _showWholeRoute,
                                     onChanged: _isSavingNotifier.value
