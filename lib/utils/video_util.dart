@@ -25,7 +25,6 @@ double calculateTotalDistance(RouteModel route, {int startIndex = 0, int endInde
       route.routePoints[i + 1].point.longitude,
     );
   }
-  print("Total distance: $totalDistance, start: $startIndex, end: $effectiveEndIndex");
   return totalDistance;
 }
 
@@ -51,11 +50,9 @@ void moveCircleAlongPath(
 
   if (progress <= 0.0) {
     circlePositionNotifier.value = path.first;
-    print("MoveCircle: progress=$progress, pos=${path.first}, startIndex=$startIndex");
     return;
   } else if (progress >= 1.0) {
     circlePositionNotifier.value = path.last;
-    print("MoveCircle: progress=$progress, pos=${path.last}, endIndex=$effectiveEndIndex");
     return;
   }
 
@@ -75,13 +72,11 @@ void moveCircleAlongPath(
       double lat = path[i].latitude + (path[i + 1].latitude - path[i].latitude) * ratio;
       double lng = path[i].longitude + (path[i + 1].longitude - path[i].longitude) * ratio;
       circlePositionNotifier.value = LatLng(lat, lng);
-      print("MoveCircle: progress=$progress, pos=($lat, $lng), segment=$i-${i + 1}");
       return;
     }
     distanceSoFar += segmentDistance;
   }
   circlePositionNotifier.value = path.last;
-  print("MoveCircle: progress=$progress, pos=${path.last}, reached end");
 }
 
 class SaveButton extends StatefulWidget {
@@ -97,6 +92,7 @@ class SaveButton extends StatefulWidget {
   final ValueNotifier<double> markerSizeNotifier;
   final ValueNotifier<double> directionNotifier;
   final ValueNotifier<double> saveDirectionNotifier;
+  final bool showWholeRoute;
   final VoidCallback? onSaveStart;
   final VoidCallback? onSaveComplete;
   final ValueNotifier<bool> isSavingNotifier;
@@ -114,6 +110,7 @@ class SaveButton extends StatefulWidget {
     required this.markerSizeNotifier,
     required this.directionNotifier,
     required this.saveDirectionNotifier,
+    required this.showWholeRoute,
     required this.onSaveStart,
     required this.onSaveComplete,
     required this.isSavingNotifier,
@@ -227,6 +224,18 @@ class _SaveButtonState extends State<SaveButton> {
 
     widget.onSaveStart?.call();
 
+    // Fit map based on showWholeRoute
+    if (widget.currentRoute.routePoints.isNotEmpty) {
+      final points = widget.currentRoute.routePoints.map((rp) => rp.point).toList();
+      fitMapToRoute(
+        widget.mapController,
+        points,
+        isAnimationScreen: true,
+        startIndex: widget.showWholeRoute ? null : widget.currentRoute.startIndex,
+        endIndex: widget.showWholeRoute ? null : widget.currentRoute.endIndex,
+      );
+    }
+
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
@@ -239,7 +248,8 @@ class _SaveButtonState extends State<SaveButton> {
     final double initialZoom = widget.initialZoom;
     const double markerBaseSize = 25.0;
 
-    double initialDirection = widget.currentRoute.startIndex < widget.currentRoute.endIndex
+    double initialDirection = widget.currentRoute.startIndex < widget.currentRoute.endIndex &&
+        widget.currentRoute.startIndex + 1 < widget.currentRoute.routePoints.length
         ? atan2(
       widget.currentRoute.routePoints[widget.currentRoute.startIndex + 1].point.longitude -
           startPoint.longitude,
@@ -326,6 +336,8 @@ class _SaveButtonState extends State<SaveButton> {
             widget.mapController,
             widget.currentRoute.routePoints.map((rp) => rp.point).toList(),
             isAnimationScreen: true,
+            startIndex: widget.showWholeRoute ? null : widget.currentRoute.startIndex,
+            endIndex: widget.showWholeRoute ? null : widget.currentRoute.endIndex,
           );
           fittedCenter = widget.mapController.camera.center;
         }

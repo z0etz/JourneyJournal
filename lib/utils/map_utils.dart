@@ -34,10 +34,27 @@ double getThreshold(double zoomLevel) {
   return 0.0002 * pow(2, (15 - zoomLevel));
 }
 
-void fitMapToRoute(MapController mapController, List<LatLng> routePoints, {bool isAnimationScreen = false}) {
-  if (routePoints.isEmpty) return; // Skip if no points
+void fitMapToRoute(
+    MapController mapController,
+    List<LatLng> points, {
+      bool isAnimationScreen = false,
+      int? startIndex,
+      int? endIndex,
+    }) {
+  if (points.isEmpty) return;
 
-  LatLngBounds bounds = LatLngBounds.fromPoints(routePoints);
+  List<LatLng> effectivePoints = points;
+  if (startIndex != null &&
+      endIndex != null &&
+      startIndex >= 0 &&
+      endIndex < points.length &&
+      startIndex <= endIndex) {
+    effectivePoints = points.sublist(startIndex, endIndex + 1);
+  }
+
+  if (effectivePoints.isEmpty) return;
+
+  LatLngBounds bounds = LatLngBounds.fromPoints(effectivePoints);
 
   // Compute center of bounds
   LatLng center = LatLng(
@@ -46,12 +63,12 @@ void fitMapToRoute(MapController mapController, List<LatLng> routePoints, {bool 
   );
 
   // Define padding (prevents points from being too close to screen edges)
-  double padding = 30.0; // Pixels
+  double padding = isAnimationScreen ? 50.0 : 100.0;
   double longitudeOffset = 0;
 
-  // Apply an offset to shift the center leftward (westward) and adjust padding
-  if(!isAnimationScreen) {
-    longitudeOffset = (bounds.east - bounds.west) * 0.375; // Adjust as needed
+  // Apply an offset to shift the center leftward (westward) for MapScreen
+  if (!isAnimationScreen) {
+    longitudeOffset = (bounds.east - bounds.west) * 0.375;
     padding = 150.0;
   }
   LatLng adjustedCenter = LatLng(center.latitude, center.longitude - longitudeOffset);
@@ -63,8 +80,10 @@ void fitMapToRoute(MapController mapController, List<LatLng> routePoints, {bool 
     ),
   );
 
-  // Move to the adjusted center after fitting bounds
-  mapController.move(adjustedCenter, mapController.camera.zoom);
+  // Move to the adjusted center after fitting bounds (only for MapScreen)
+  if (!isAnimationScreen) {
+    mapController.move(adjustedCenter, mapController.camera.zoom);
+  }
 }
 
 Future<void> showRoutePointDialog(
@@ -73,8 +92,8 @@ Future<void> showRoutePointDialog(
       required TextEditingController titleController,
       required TextEditingController descriptionController,
       DateTime? selectedDate,
-      required Function() onDelete, // Callback to delete route point
-      required Function() onSave,   // Callback to save route point
+      required Function() onDelete,
+      required Function() onSave,
     }) {
   return showDialog(
     context: context,
@@ -142,7 +161,7 @@ Future<void> showRoutePointDialog(
                         for (var image in pickedImages) {
                           String savedPath = await saveImageLocally(image);
                           setDialogState(() {
-                            routePoint.images.add(savedPath); // Directly update `routePoint.images`
+                            routePoint.images.add(savedPath);
                           });
                         }
                       }
@@ -152,7 +171,6 @@ Future<void> showRoutePointDialog(
                       style: TextStyle(color: Colors.blue),
                     ),
                   ),
-                  // Display selected images with delete option
                   SizedBox(
                     height: 100,
                     child: ListView(
@@ -179,7 +197,7 @@ Future<void> showRoutePointDialog(
                                     await file.delete();
                                   }
                                   setDialogState(() {
-                                    routePoint.images.remove(path); // Correctly update list
+                                    routePoint.images.remove(path);
                                   });
                                 },
                                 child: Container(
@@ -205,24 +223,22 @@ Future<void> showRoutePointDialog(
             ),
             actions: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, // Ensures proper alignment
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Delete button (left-aligned)
                   TextButton(
                     onPressed: () {
-                      onDelete(); // Call the delete callback
-                      Navigator.of(context).pop(); // Close the dialog
+                      onDelete();
+                      Navigator.of(context).pop();
                     },
                     child: const Text(
                       "Delete",
                       style: TextStyle(color: Colors.red),
                     ),
                   ),
-                  // Save button (right-aligned)
                   TextButton(
                     onPressed: () {
-                      onSave(); // Call the save callback
-                      Navigator.of(context).pop(); // Close the dialog
+                      onSave();
+                      Navigator.of(context).pop();
                     },
                     child: const Text("Save"),
                   ),

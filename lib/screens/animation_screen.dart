@@ -27,6 +27,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   final ValueNotifier<bool> _isSavingNotifier = ValueNotifier<bool>(false);
   bool _isControlsExpanded = false;
   bool _showRouteTitles = false;
+  bool _showWholeRoute = true;
   String _selectedAspectRatio = "9:16";
   bool _selectingStart = false;
   bool _selectingEnd = false;
@@ -46,7 +47,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
-  final Duration _animationDuration = const Duration(seconds: 5);
+  final Duration _animationDuration = const Duration(seconds: 15);
   double _totalDistance = 0.0;
   static const double markerBaseSize = 25.0;
 
@@ -96,7 +97,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    currentRoute = widget.initialRoute ?? RouteModel(id: '', name: ''); // Fallback only for safety
+    currentRoute = widget.initialRoute ?? RouteModel(id: '', name: '');
     _animationController = AnimationController(
       vsync: this,
       duration: _animationDuration,
@@ -265,6 +266,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
             startIndex: currentRoute.startIndex,
             endIndex: currentRoute.endIndex,
           );
+          _setInitialCirclePosition();
           _selectingEnd = false;
         }
       }
@@ -279,11 +281,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       return;
     }
 
-    // Use a local preview duration that's 2 seconds shorter than _animationDuration
     final previewDuration = Duration(
       milliseconds: _animationDuration.inMilliseconds - 2000,
     );
-    // Calculate the scale factor to compress the animation
     final scaleFactor = previewDuration.inMilliseconds / _animationDuration.inMilliseconds;
 
     _progressAnimation = Tween<double>(begin: 0.0, end: 1.0 / scaleFactor).animate(
@@ -296,9 +296,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _markerSizeNotifier.value = markerBaseSize;
     LatLng? lastPosition;
     _progressAnimation.addListener(() {
-      // Scale the progress to match the full range in the shorter duration
       double scaledProgress = _progressAnimation.value * scaleFactor;
-      print("Animation progress: $scaledProgress, raw: ${_progressAnimation.value}, start: ${currentRoute.startIndex}, end: ${currentRoute.endIndex}, pos: ${_circlePositionNotifier.value}");
       moveCircleAlongPath(
         scaledProgress,
         currentRoute,
@@ -333,6 +331,91 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _isAnimating = false;
       });
     });
+  }
+
+  List<Marker> _buildMarkers({bool isSaving = false}) {
+    final List<Marker> markers = [];
+    final int startIndex = currentRoute.startIndex;
+    final int endIndex = currentRoute.endIndex;
+
+    for (int i = 0; i < currentRoute.routePoints.length; i++) {
+      if (isSaving && !_showWholeRoute && (i < startIndex || i > endIndex)) {
+        continue;
+      }
+      final routePoint = currentRoute.routePoints[i];
+      markers.add(
+        Marker(
+          point: routePoint.point,
+          width: 25.0,
+          height: 25.0,
+          child: GestureDetector(
+            onTap: () {
+              if (_isSavingNotifier.value || _isAnimating) return;
+              _handleMarkerTap(i);
+            },
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (_showRouteTitles && routePoint.title.isNotEmpty)
+                  Positioned(
+                    bottom: 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        routePoint.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
+                Icon(
+                  Icons.circle,
+                  color: i == startIndex
+                      ? const Color(0xFF4c8d40)
+                      : i == endIndex
+                      ? const Color(0xFFde3a71)
+                      : Colors.blue,
+                  size: 15.0,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return markers;
+  }
+
+  List<PolylineLayer> _buildPolylines({bool isSaving = false}) {
+    if (currentRoute.routePoints.isEmpty) return [];
+
+    final int startIndex = currentRoute.startIndex;
+    final int endIndex = currentRoute.endIndex;
+
+    final effectivePoints = (isSaving && !_showWholeRoute && startIndex >= 0 && endIndex < currentRoute.routePoints.length && startIndex <= endIndex)
+        ? currentRoute.routePoints.sublist(startIndex, endIndex + 1).map((rp) => rp.point).toList()
+        : currentRoute.routePoints.map((rp) => rp.point).toList();
+
+    return [
+      PolylineLayer(
+        polylines: [
+          Polyline(
+            points: effectivePoints,
+            color: Colors.blue,
+            strokeWidth: 4.0,
+          ),
+        ],
+      ),
+    ];
   }
 
   @override
@@ -417,39 +500,24 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                             TileLayer(
                               urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                             ),
-                            if (currentRoute.routePoints.isNotEmpty)
-                              PolylineLayer(
-                                polylines: [
-                                  Polyline(
-                                    points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
-                                    color: Colors.blue,
-                                    strokeWidth: 4.0,
-                                  ),
-                                ],
-                              ),
-                            MarkerLayer(
-                              markers: currentRoute.routePoints.map((routePoint) {
-                                int index = currentRoute.routePoints.indexOf(routePoint);
-                                return Marker(
-                                  point: routePoint.point,
-                                  width: 25.0,
-                                  height: 25.0,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      _handleMarkerTap(index);
-                                    },
-                                    child: Icon(
-                                      Icons.circle,
-                                      color: index == currentRoute.startIndex
-                                          ? const Color(0xFF4c8d40)
-                                          : index == currentRoute.endIndex
-                                          ? const Color(0xFFde3a71)
-                                          : Colors.blue,
-                                      size: 15.0,
-                                    ),
-                                  ),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _isSavingNotifier,
+                              builder: (context, isSaving, child) {
+                                return PolylineLayer(
+                                  polylines: _buildPolylines(isSaving: isSaving)
+                                      .map((layer) => layer.polylines)
+                                      .expand((i) => i)
+                                      .toList(),
                                 );
-                              }).toList(),
+                              },
+                            ),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _isSavingNotifier,
+                              builder: (context, isSaving, child) {
+                                return MarkerLayer(
+                                  markers: _buildMarkers(isSaving: isSaving),
+                                );
+                              },
                             ),
                             ValueListenableBuilder<bool>(
                               valueListenable: _isSavingNotifier,
@@ -610,6 +678,22 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   ),
                                 ],
                               ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text("Show Whole Route"),
+                                  Switch(
+                                    value: _showWholeRoute,
+                                    onChanged: _isSavingNotifier.value
+                                        ? null
+                                        : (value) {
+                                      setState(() {
+                                        _showWholeRoute = value;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 10),
                               const Text("Aspect Ratio"),
                               DropdownButton<String>(
@@ -648,6 +732,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   markerSizeNotifier: _markerSizeNotifier,
                                   directionNotifier: _directionNotifier,
                                   saveDirectionNotifier: _saveDirectionNotifier,
+                                  showWholeRoute: _showWholeRoute,
                                   onSaveStart: () {
                                     _isSavingNotifier.value = true;
                                     widget.onSavingChanged?.call(true);
