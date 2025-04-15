@@ -95,6 +95,7 @@ Future<void> showRoutePointDialog(
       DateTime? selectedDate,
       required Function() onDelete,
       required Function() onSave,
+      List<String> availableTags = const ['highlight'], // From RouteModel.tags
     }) {
   return showDialog(
     context: context,
@@ -164,7 +165,6 @@ Future<void> showRoutePointDialog(
                           setDialogState(() {
                             routePoint.images.add(ImageData(
                               path: savedPath,
-                              tags: ['highlight'],
                               order: routePoint.images.length,
                             ));
                           });
@@ -176,51 +176,108 @@ Future<void> showRoutePointDialog(
                       style: TextStyle(color: Colors.blue),
                     ),
                   ),
+                  const SizedBox(height: 8),
                   SizedBox(
-                    height: 100,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
+                    height: 200,
+                    child: ReorderableListView(
+                      shrinkWrap: true,
                       children: routePoint.images.map((img) {
-                        return Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: Image.file(
-                                File(img.path),
-                                width: 80,
-                                height: 80,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: GestureDetector(
-                                onTap: () async {
-                                  final file = File(img.path);
-                                  if (await file.exists()) {
-                                    await file.delete();
+                        final key = ValueKey(img.path);
+                        return ListTile(
+                          key: key,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 4.0),
+                          leading: Image.file(
+                            File(img.path),
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                          ),
+                          title: Wrap(
+                            spacing: 8,
+                            children: img.tags.map((tag) => Chip(
+                              label: Text(tag),
+                              onDeleted: () {
+                                setDialogState(() {
+                                  img.tags.remove(tag);
+                                });
+                              },
+                            )).toList()..add(
+                              Chip(
+                                label: const Text('Add Tag'),
+                                onPressed: () async {
+                                  String? newTag = await showDialog<String>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Add Tag'),
+                                      content: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Wrap(
+                                              spacing: 8,
+                                              children: availableTags.map((tag) => ChoiceChip(
+                                                label: Text(tag),
+                                                selected: false,
+                                                onSelected: (_) {
+                                                  Navigator.pop(context, tag);
+                                                },
+                                              )).toList(),
+                                            ),
+                                            TextField(
+                                              autofocus: true,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Custom Tag',
+                                              ),
+                                              onSubmitted: (value) {
+                                                Navigator.pop(context, value.trim());
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Cancel'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (newTag != null && newTag.isNotEmpty) {
+                                    setDialogState(() {
+                                      img.tags.add(newTag);
+                                    });
                                   }
-                                  setDialogState(() {
-                                    routePoint.images.remove(img);
-                                  });
                                 },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                ),
                               ),
                             ),
-                          ],
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () async {
+                              final file = File(img.path);
+                              if (await file.exists()) {
+                                await file.delete();
+                              }
+                              setDialogState(() {
+                                routePoint.images.remove(img);
+                              });
+                            },
+                          ),
                         );
                       }).toList(),
+                      onReorder: (oldIndex, newIndex) {
+                        setDialogState(() {
+                          if (newIndex > oldIndex) {
+                            newIndex -= 1;
+                          }
+                          final img = routePoint.images.removeAt(oldIndex);
+                          routePoint.images.insert(newIndex, img);
+                          for (int i = 0; i < routePoint.images.length; i++) {
+                            routePoint.images[i].order = i;
+                          }
+                        });
+                      },
                     ),
                   ),
                 ],

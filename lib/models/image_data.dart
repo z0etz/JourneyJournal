@@ -15,7 +15,7 @@ class ImageData {
 
   ImageData({
     required this.path,
-    this.tags = const ['highlight'],
+    this.tags = const [],
     required this.order,
   });
 }

@@ -147,7 +147,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       endIndex: _showWholeRoute ? null : currentRoute.endIndex,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return; // Prevent setState if disposed
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return; // Double-check
         setState(() {
           fitZoom = _mapController.camera.zoom;
           zoomLevel = _mapController.camera.zoom;

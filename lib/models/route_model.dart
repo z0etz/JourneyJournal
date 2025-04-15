@@ -26,6 +26,9 @@ class RouteModel {
   @HiveField(6)
   bool snapEndToLast;
 
+  @HiveField(7)
+  List<String> tags; // New field for tag suggestions
+
   RouteModel({
     required this.id,
     required this.name,
@@ -34,9 +37,11 @@ class RouteModel {
     String? endPointId,
     this.snapStartToFirst = true,
     this.snapEndToLast = true,
+    List<String>? tags,
   })  : routePoints = routePoints ?? [],
         startPointId = startPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.first.id : ''),
-        endPointId = endPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.last.id : '');
+        endPointId = endPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.last.id : ''),
+        tags = tags ?? ['highlight']; // Default with "highlight"
 
   int get startIndex => routePoints.indexWhere((p) => p.id == startPointId);
   int get endIndex => routePoints.indexWhere((p) => p.id == endPointId);
@@ -86,6 +91,14 @@ class RouteModel {
       snapStartToFirst = true;
       snapEndToLast = true;
     }
+    // Sync tags from images
+    final allTags = <String>{'highlight'}; // Always include "highlight"
+    for (var point in routePoints) {
+      for (var img in point.images) {
+        allTags.addAll(img.tags);
+      }
+    }
+    tags = allTags.toList()..sort();
     await box.put(id, this);
   }
 

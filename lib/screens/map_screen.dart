@@ -9,7 +9,6 @@ import 'package:journeyjournal/utils/map_utils.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:uuid/uuid.dart';
 
-
 class MapScreen extends StatefulWidget {
   final RouteModel? initialRoute;
   const MapScreen({super.key, this.initialRoute});
@@ -65,24 +64,22 @@ class _MapScreenState extends State<MapScreen> {
   // Method to delete the route point
   void _deleteRoutePoint(RoutePoint routePoint) {
     setState(() {
-      currentRoute.routePoints.remove(
-          routePoint); // Remove the route point from the list
-      currentRoute.save(); // Save the updated route
+      currentRoute.routePoints.remove(routePoint);
+      currentRoute.save();
     });
   }
 
-// Method to save the route point's changes
-  void _saveRoutePoint(RoutePoint routePoint,
+  // Method to save the route point's changes
+  void _saveRoutePoint(
+      RoutePoint routePoint,
       TextEditingController titleController,
-      TextEditingController descriptionController, DateTime? selectedDate) {
-    routePoint.title = titleController.text; // Update the title
-    routePoint.description =
-        descriptionController.text; // Update the description
-    routePoint.date = selectedDate; // Update the date
-    // Ensure images are saved correctly
-    routePoint.images =
-        List.from(routePoint.images); // Make sure the list is updated
-    currentRoute.save(); // Save the updated route
+      TextEditingController descriptionController,
+      DateTime? selectedDate) {
+    routePoint.title = titleController.text;
+    routePoint.description = descriptionController.text;
+    routePoint.date = selectedDate;
+    // Images are updated in dialog
+    currentRoute.save();
   }
 
   // Add marker at tapped location
@@ -92,8 +89,7 @@ class _MapScreenState extends State<MapScreen> {
       point: point,
       id: uuid.v4(),
     );
-    newRoutePoint.images = []; // Initialize images list
-
+    newRoutePoint.images = [];
 
     if (currentRoute.routePoints.isEmpty) {
       setState(() {
@@ -124,9 +120,9 @@ class _MapScreenState extends State<MapScreen> {
     if (!inserted) {
       setState(() {
         if (_reverseMode) {
-          currentRoute.routePoints.insert(0, newRoutePoint); // Add at the beginning
+          currentRoute.routePoints.insert(0, newRoutePoint);
         } else {
-          currentRoute.routePoints.add(newRoutePoint); // Add at the end
+          currentRoute.routePoints.add(newRoutePoint);
         }
         currentRoute.save();
       });
@@ -148,11 +144,8 @@ class _MapScreenState extends State<MapScreen> {
           return GestureDetector(
             onTap: () {
               if (routePoint.hasInfo) {
-                // If the route point has info, show the dialog
-                TextEditingController titleController = TextEditingController(
-                    text: routePoint.title);
-                TextEditingController descriptionController = TextEditingController(
-                    text: routePoint.description);
+                TextEditingController titleController = TextEditingController(text: routePoint.title);
+                TextEditingController descriptionController = TextEditingController(text: routePoint.description);
                 DateTime? selectedDate = routePoint.date;
 
                 showRoutePointDialog(
@@ -162,16 +155,12 @@ class _MapScreenState extends State<MapScreen> {
                   descriptionController: descriptionController,
                   selectedDate: selectedDate,
                   onDelete: () => _deleteRoutePoint(routePoint),
-                  // Pass the delete callback
-                  onSave: () =>
-                      _saveRoutePoint(
-                          routePoint, titleController, descriptionController,
-                          selectedDate), // Pass the save callback
+                  onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate),
+                  availableTags: currentRoute.tags, // Pass route tags
                 ).then((_) {
-                  setState(() {}); // Refresh UI after dialog is closed
+                  setState(() {});
                 });
               } else {
-                // If no info, delete the route point on tap
                 setState(() {
                   currentRoute.routePoints.remove(routePoint);
                 });
@@ -179,10 +168,8 @@ class _MapScreenState extends State<MapScreen> {
               }
             },
             onLongPress: () {
-              TextEditingController titleController = TextEditingController(
-                  text: routePoint.title);
-              TextEditingController descriptionController = TextEditingController(
-                  text: routePoint.description);
+              TextEditingController titleController = TextEditingController(text: routePoint.title);
+              TextEditingController descriptionController = TextEditingController(text: routePoint.description);
               DateTime? selectedDate = routePoint.date;
 
               showRoutePointDialog(
@@ -192,29 +179,22 @@ class _MapScreenState extends State<MapScreen> {
                 descriptionController: descriptionController,
                 selectedDate: selectedDate,
                 onDelete: () => _deleteRoutePoint(routePoint),
-                // Pass the delete callback
-                onSave: () =>
-                    _saveRoutePoint(
-                        routePoint, titleController, descriptionController,
-                        selectedDate), // Pass the save callback
+                onSave: () => _saveRoutePoint(routePoint, titleController, descriptionController, selectedDate),
+                availableTags: currentRoute.tags, // Pass route tags
               ).then((_) {
-                setState(() {}); // Refresh UI after dialog is closed
+                setState(() {});
               });
             },
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Title (closer to circle)
                 if (routePoint.title.isNotEmpty)
                   Positioned(
                     bottom: 5,
-                    // Reduce this value to move the title further down the circle
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.9),
-                        // Semi-transparent background
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: Colors.black54, width: 1),
                       ),
@@ -230,22 +210,18 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                   ),
-                // Circle icon
                 Icon(
-                  // If route point has info, use the star icon
                   routePoint.hasInfo
-                      ? Icons.stars // Star icon for route points with info
+                      ? Icons.stars
                       : currentRoute.routePoints.indexOf(routePoint) == 0
-                      ? Icons.trip_origin // First point, start of route
-                      : currentRoute.routePoints.indexOf(routePoint) ==
-                      currentRoute.routePoints.length - 1
-                      ? Icons.flag_circle // Last point, end of route
-                      : Icons.circle, // Normal points
+                      ? Icons.trip_origin
+                      : currentRoute.routePoints.indexOf(routePoint) == currentRoute.routePoints.length - 1
+                      ? Icons.flag_circle
+                      : Icons.circle,
                   size: isDragging ? 65 : 40,
                   color: currentRoute.routePoints.indexOf(routePoint) == 0
                       ? const Color(0xFF4c8d40)
-                      : currentRoute.routePoints.indexOf(routePoint) ==
-                      currentRoute.routePoints.length - 1
+                      : currentRoute.routePoints.indexOf(routePoint) == currentRoute.routePoints.length - 1
                       ? const Color(0xFFde3a71)
                       : Colors.blue,
                 ),
@@ -258,7 +234,6 @@ class _MapScreenState extends State<MapScreen> {
             routePoint.point = newPoint;
           });
         },
-
       );
     }).toList();
   }
@@ -280,7 +255,7 @@ class _MapScreenState extends State<MapScreen> {
               setState(() {
                 currentRoute.name = newName;
                 _isEditing = false;
-                currentRoute.save(); // Save updated route
+                currentRoute.save();
               });
             },
           )
@@ -291,19 +266,10 @@ class _MapScreenState extends State<MapScreen> {
         alignment: Alignment.topLeft,
         minWidth: 0,
         minHeight: 0,
-        maxWidth: MediaQuery
-            .of(context)
-            .size
-            .width + 200,
-        // Extra width for overflow
-        maxHeight: MediaQuery
-            .of(context)
-            .size
-            .height + 100,
-        // Extra height for overflow
+        maxWidth: MediaQuery.of(context).size.width + 200,
+        maxHeight: MediaQuery.of(context).size.height + 100,
         child: Transform.translate(
           offset: const Offset(-200, -100),
-          // Offset to allow overflow in all directions
           child: FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -329,8 +295,7 @@ class _MapScreenState extends State<MapScreen> {
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: currentRoute.routePoints.map((
-                          routePoint) => routePoint.point).toList(),
+                      points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
                       color: Colors.blue.withAlpha(180),
                       strokeWidth: 4.0,
                     ),
@@ -345,9 +310,8 @@ class _MapScreenState extends State<MapScreen> {
       ),
       floatingActionButton: Stack(
         children: [
-          // Left-side button (Toggle reverse mode)
           Positioned(
-            left: 38, // Adjust position
+            left: 38,
             bottom: 6,
             child: FloatingActionButton(
               onPressed: () {
@@ -356,19 +320,15 @@ class _MapScreenState extends State<MapScreen> {
                 });
               },
               backgroundColor: _reverseMode ? Colors.blueGrey : null,
-              // Change color when active
               child: const Icon(Icons.route),
             ),
           ),
-
-          // Right-side button (Create new route)
           Positioned(
             right: 6,
             bottom: 6,
             child: FloatingActionButton(
               onPressed: () async {
                 RouteModel newRoute = await RouteModel.createNewRoute();
-
                 SchedulerBinding.instance.addPostFrameCallback((_) {
                   Navigator.pushAndRemoveUntil(
                     context,
