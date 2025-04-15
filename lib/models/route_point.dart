@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
+import 'image_data.dart';
 
 part 'route_point.g.dart';
 
@@ -15,7 +16,7 @@ class RoutePoint {
   String description;
 
   @HiveField(3)
-  List<String> images;
+  List<ImageData> images;
 
   @HiveField(4)
   DateTime? date;
@@ -27,10 +28,10 @@ class RoutePoint {
     LatLng? point,
     this.title = '',
     this.description = '',
-    this.images = const [],
+    List<ImageData>? images,
     this.date,
     required this.id,
-  }) {
+  }) : images = images ?? [] {
     if (point != null) {
       _point = [point.latitude, point.longitude];
     }

@@ -4,11 +4,13 @@ import 'package:journeyjournal/screens/login_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/lat_lang_adapter.dart';
+import 'models/image_data.dart';
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
+  Hive.registerAdapter(ImageDataAdapter());
   Hive.registerAdapter(RouteModelAdapter());
   Hive.registerAdapter(RoutePointAdapter());
   Hive.registerAdapter(LatLngAdapter());

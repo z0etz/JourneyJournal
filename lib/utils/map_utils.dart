@@ -3,9 +3,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter/material.dart';
 import 'package:journeyjournal/models/route_point.dart';
+import 'package:journeyjournal/models/route_model.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:journeyjournal/utils/image_helper.dart';
+import '../models/image_data.dart';
 
 double distance(LatLng point1, LatLng point2) {
   return sqrt(
@@ -56,17 +58,14 @@ void fitMapToRoute(
 
   LatLngBounds bounds = LatLngBounds.fromPoints(effectivePoints);
 
-  // Compute center of bounds
   LatLng center = LatLng(
     (bounds.north + bounds.south) / 2,
     (bounds.east + bounds.west) / 2,
   );
 
-  // Define padding (prevents points from being too close to screen edges)
   double padding = isAnimationScreen ? 50.0 : 100.0;
   double longitudeOffset = 0;
 
-  // Apply an offset to shift the center leftward (westward) for MapScreen
   if (!isAnimationScreen) {
     longitudeOffset = (bounds.east - bounds.west) * 0.375;
     padding = 150.0;
@@ -80,20 +79,122 @@ void fitMapToRoute(
     ),
   );
 
-  // Move to the adjusted center after fitting bounds (only for MapScreen)
   if (!isAnimationScreen) {
     mapController.move(adjustedCenter, mapController.camera.zoom);
   }
 }
 
+Future<void> showImageTagDialog(
+    BuildContext context,
+    ImageData image,
+    RouteModel routeModel, {
+      List<String> availableTags = const ['highlight'],
+    }) {
+  TextEditingController tagController = TextEditingController();
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Edit Tags'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: image.tags.map((tag) => Chip(
+                      label: Text(tag),
+                      onDeleted: () {
+                        setDialogState(() {
+                          image.tags.remove(tag);
+                          routeModel.save();
+                        });
+                      },
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: availableTags
+                        .where((tag) => !image.tags.contains(tag))
+                        .map((tag) => ChoiceChip(
+                      label: Text(tag),
+                      selected: false,
+                      onSelected: (_) {
+                        setDialogState(() {
+                          image.tags.add(tag);
+                          routeModel.save();
+                        });
+                      },
+                    ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: tagController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Custom Tag',
+                    ),
+                    onSubmitted: (value) {
+                      final newTag = value.trim();
+                      if (newTag.isNotEmpty) {
+                        setDialogState(() {
+                          image.tags.add(newTag);
+                          routeModel.save();
+                          tagController.clear();
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      final newTag = tagController.text.trim();
+                      if (newTag.isNotEmpty) {
+                        setDialogState(() {
+                          image.tags.add(newTag);
+                          routeModel.save();
+                          tagController.clear();
+                        });
+                      }
+                    },
+                    child: const Text('Add'),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 Future<void> showRoutePointDialog(
     BuildContext context,
-    RoutePoint routePoint, {
+    RoutePoint routePoint,
+    RouteModel routeModel, {
       required TextEditingController titleController,
       required TextEditingController descriptionController,
       DateTime? selectedDate,
       required Function() onDelete,
       required Function() onSave,
+      List<String> availableTags = const ['highlight'],
     }) {
   return showDialog(
     context: context,
@@ -161,9 +262,14 @@ Future<void> showRoutePointDialog(
                         for (var image in pickedImages) {
                           String savedPath = await saveImageLocally(image);
                           setDialogState(() {
-                            routePoint.images.add(savedPath);
+                            routePoint.images.add(ImageData(
+                              path: savedPath,
+                              order: routePoint.images.length,
+                              tags: [],
+                            ));
                           });
                         }
+                        routeModel.save();
                       }
                     },
                     child: const Text(
@@ -171,52 +277,118 @@ Future<void> showRoutePointDialog(
                       style: TextStyle(color: Colors.blue),
                     ),
                   ),
-                  SizedBox(
-                    height: 100,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: routePoint.images.map((path) {
-                        return Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(4.0),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: routePoint.images.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final img = entry.value;
+                      final key = ValueKey(img.path);
+                      return DragTarget<ImageData>(
+                        builder: (context, candidateData, rejectedData) {
+                          return LongPressDraggable<ImageData>(
+                            data: img,
+                            feedback: Material(
+                              elevation: 4,
                               child: Image.file(
-                                File(path),
+                                File(img.path),
                                 width: 80,
                                 height: 80,
                                 fit: BoxFit.cover,
                               ),
                             ),
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: GestureDetector(
-                                onTap: () async {
-                                  final file = File(path);
-                                  if (await file.exists()) {
-                                    await file.delete();
-                                  }
-                                  setDialogState(() {
-                                    routePoint.images.remove(path);
-                                  });
-                                },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                ),
+                            childWhenDragging: Opacity(
+                              opacity: 0.3,
+                              child: Image.file(
+                                File(img.path),
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
                               ),
                             ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
+                            child: Container(
+                              key: key,
+                              width: 80,
+                              height: 80,
+                              child: Stack(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      showImageTagDialog(
+                                        context,
+                                        img,
+                                        routeModel,
+                                        availableTags: routeModel.tags,
+                                      ).then((_) {
+                                        setDialogState(() {});
+                                      });
+                                    },
+                                    child: Image.file(
+                                      File(img.path),
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: GestureDetector(
+                                      onTap: () async {
+                                        final file = File(img.path);
+                                        if (await file.exists()) {
+                                          await file.delete();
+                                        }
+                                        setDialogState(() {
+                                          routePoint.images.remove(img);
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.close,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (img.tags.isNotEmpty)
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Container(
+                                        color: Colors.black54,
+                                        child: const Icon(
+                                          Icons.tag,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        onAccept: (droppedImg) {
+                          setDialogState(() {
+                            final oldIndex = routePoint.images.indexOf(droppedImg);
+                            routePoint.images.removeAt(oldIndex);
+                            routePoint.images.insert(index, droppedImg);
+                            for (int i = 0; i < routePoint.images.length; i++) {
+                              routePoint.images[i].order = i;
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
                   ),
                 ],
               ),
@@ -228,7 +400,7 @@ Future<void> showRoutePointDialog(
                   TextButton(
                     onPressed: () {
                       onDelete();
-                      Navigator.of(context).pop();
+                      Navigator.pop(context);
                     },
                     child: const Text(
                       "Delete",
@@ -238,7 +410,7 @@ Future<void> showRoutePointDialog(
                   TextButton(
                     onPressed: () {
                       onSave();
-                      Navigator.of(context).pop();
+                      Navigator.pop(context);
                     },
                     child: const Text("Save"),
                   ),
