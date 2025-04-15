@@ -42,5 +42,4 @@ class RoutePoint {
 
   // Computed property (not stored in Hive)
   bool get hasInfo => title.isNotEmpty || description.isNotEmpty || date != null || images.isNotEmpty;
-
 }

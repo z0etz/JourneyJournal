@@ -20,8 +20,8 @@ class RouteModelAdapter extends TypeAdapter<RouteModel> {
       id: fields[0] as String,
       name: fields[1] as String,
       routePoints: (fields[2] as List?)?.cast<RoutePoint>(),
-      startIndex: fields[3] as int,
-      endIndex: fields[4] as int,
+      startPointId: fields[3] as String?,
+      endPointId: fields[4] as String?,
     );
   }
 
@@ -36,9 +36,9 @@ class RouteModelAdapter extends TypeAdapter<RouteModel> {
       ..writeByte(2)
       ..write(obj.routePoints)
       ..writeByte(3)
-      ..write(obj.startIndex)
+      ..write(obj.startPointId)
       ..writeByte(4)
-      ..write(obj.endIndex);
+      ..write(obj.endPointId);
   }
 
   @override

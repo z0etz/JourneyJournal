@@ -429,10 +429,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     child: Icon(
                                       Icons.circle,
                                       color: index == currentRoute.startIndex
-                                          ? const Color(0xFF4c8d40) // Green for start
+                                          ? const Color(0xFF4c8d40)
                                           : index == currentRoute.endIndex
-                                          ? const Color(0xFFde3a71) // Red for end
-                                          : Colors.blue, // Default
+                                          ? const Color(0xFFde3a71)
+                                          : Colors.blue,
                                       size: 15.0,
                                     ),
                                   ),

@@ -7,6 +7,7 @@ import 'package:journeyjournal/screens/main_screen.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
 import 'package:journeyjournal/models/route_model.dart';
+import 'package:uuid/uuid.dart';
 
 
 class MapScreen extends StatefulWidget {
@@ -87,8 +88,11 @@ class _MapScreenState extends State<MapScreen> {
 
   // Add marker at tapped location
   void _addMarker(LatLng point) {
-    RoutePoint newRoutePoint = RoutePoint();
-    newRoutePoint.point = point;
+    final uuid = Uuid();
+    RoutePoint newRoutePoint = RoutePoint(
+      point: point,
+      id: uuid.v4(),
+    );
     newRoutePoint.images = []; // Initialize images list
 
 
