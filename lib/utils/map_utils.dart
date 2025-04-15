@@ -95,7 +95,7 @@ Future<void> showRoutePointDialog(
       DateTime? selectedDate,
       required Function() onDelete,
       required Function() onSave,
-      List<String> availableTags = const ['highlight'], // From RouteModel.tags
+      List<String> availableTags = const ['highlight'],
     }) {
   return showDialog(
     context: context,
@@ -192,19 +192,22 @@ Future<void> showRoutePointDialog(
                             height: 60,
                             fit: BoxFit.cover,
                           ),
-                          title: Wrap(
-                            spacing: 8,
-                            children: img.tags.map((tag) => Chip(
-                              label: Text(tag),
-                              onDeleted: () {
-                                setDialogState(() {
-                                  img.tags.remove(tag);
-                                });
-                              },
-                            )).toList()..add(
-                              Chip(
-                                label: const Text('Add Tag'),
-                                onPressed: () async {
+                          title: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                children: img.tags.map((tag) => Chip(
+                                  label: Text(tag),
+                                  onDeleted: () {
+                                    setDialogState(() {
+                                      img.tags.remove(tag);
+                                    });
+                                  },
+                                )).toList(),
+                              ),
+                              GestureDetector(
+                                onTap: () async {
                                   String? newTag = await showDialog<String>(
                                     context: context,
                                     builder: (context) => AlertDialog(
@@ -249,8 +252,13 @@ Future<void> showRoutePointDialog(
                                     });
                                   }
                                 },
+                                child: Chip(
+                                  label: const Text('+ Add Tag'),
+                                  backgroundColor: Colors.blue.shade100,
+                                  onDeleted: null,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
