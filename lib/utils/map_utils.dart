@@ -137,12 +137,23 @@ Future<void> showImageTagDialog(
                     ))
                         .toList(),
                   ),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: tagController,
                     autofocus: true,
                     decoration: const InputDecoration(
                       labelText: 'Custom Tag',
                     ),
+                    onSubmitted: (value) {
+                      final newTag = value.trim();
+                      if (newTag.isNotEmpty) {
+                        setDialogState(() {
+                          image.tags.add(newTag);
+                        });
+                        routeModel.save(); // Update RouteModel.tags
+                        tagController.clear();
+                      }
+                    },
                   ),
                 ],
               ),
@@ -192,8 +203,6 @@ Future<void> showRoutePointDialog(
   return showDialog(
     context: context,
     builder: (BuildContext context) {
-      ImageData? draggingImage;
-      Offset? dragPosition;
       return StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
@@ -260,11 +269,11 @@ Future<void> showRoutePointDialog(
                             routePoint.images.add(ImageData(
                               path: savedPath,
                               order: routePoint.images.length,
-                              tags: [], // Explicitly initialize tags
+                              tags: [],
                             ));
                           });
                         }
-                        routeModel.save(); // Save to ensure new images persist
+                        routeModel.save(); // Persist new images
                       }
                     },
                     child: const Text(
@@ -273,145 +282,117 @@ Future<void> showRoutePointDialog(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: routePoint.images.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final img = entry.value;
-                          final key = ValueKey(img.path);
-                          bool isDraggingThis = draggingImage == img;
-                          return GestureDetector(
-                            key: key,
-                            onLongPressStart: (details) {
-                              setDialogState(() {
-                                draggingImage = img;
-                                dragPosition = details.globalPosition;
-                              });
-                            },
-                            onLongPressMoveUpdate: (details) {
-                              setDialogState(() {
-                                dragPosition = details.globalPosition;
-                              });
-                            },
-                            onLongPressEnd: (details) {
-                              if (dragPosition != null) {
-                                final RenderBox box = context.findRenderObject() as RenderBox;
-                                final localPosition = box.globalToLocal(details.globalPosition);
-                                final imageWidth = 80 + 8; // Image size + spacing
-                                final imagesPerRow = (constraints.maxWidth / imageWidth).floor();
-                                final row = (localPosition.dy / (80 + 8)).floor();
-                                final col = (localPosition.dx / imageWidth).floor();
-                                final newIndex = row * imagesPerRow + col;
-                                if (newIndex >= 0 && newIndex < routePoint.images.length && newIndex != index) {
-                                  setDialogState(() {
-                                    final movedImg = routePoint.images.removeAt(index);
-                                    routePoint.images.insert(newIndex, movedImg);
-                                    for (int i = 0; i < routePoint.images.length; i++) {
-                                      routePoint.images[i].order = i;
-                                    }
-                                  });
-                                }
-                              }
-                              setDialogState(() {
-                                draggingImage = null;
-                                dragPosition = null;
-                              });
-                            },
-                            child: Stack(
-                              children: [
-                                Container(
-                                  width: 80,
-                                  height: 80,
-                                  child: Stack(
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () {
-                                          showImageTagDialog(
-                                            context,
-                                            img,
-                                            routeModel,
-                                            availableTags: routeModel.tags,
-                                          ).then((_) {
-                                            setDialogState(() {}); // Refresh dialog
-                                          });
-                                        },
-                                        child: Opacity(
-                                          opacity: isDraggingThis ? 0.3 : 1.0,
-                                          child: Image.file(
-                                            File(img.path),
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 0,
-                                        right: 0,
-                                        child: GestureDetector(
-                                          onTap: () async {
-                                            final file = File(img.path);
-                                            if (await file.exists()) {
-                                              await file.delete();
-                                            }
-                                            setDialogState(() {
-                                              routePoint.images.remove(img);
-                                            });
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.all(2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Icon(
-                                              Icons.close,
-                                              color: Colors.white,
-                                              size: 16,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (img.tags.isNotEmpty)
-                                        Positioned(
-                                          bottom: 0,
-                                          left: 0,
-                                          right: 0,
-                                          child: Container(
-                                            color: Colors.black54,
-                                            child: const Icon(
-                                              Icons.tag,
-                                              color: Colors.white,
-                                              size: 16,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: routePoint.images.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final img = entry.value;
+                      final key = ValueKey(img.path);
+                      return DragTarget<ImageData>(
+                        builder: (context, candidateData, rejectedData) {
+                          return LongPressDraggable<ImageData>(
+                            data: img,
+                            feedback: Material(
+                              elevation: 4,
+                              child: Image.file(
+                                File(img.path),
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            childWhenDragging: Opacity(
+                              opacity: 0.3,
+                              child: Image.file(
+                                File(img.path),
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            child: Container(
+                              key: key,
+                              width: 80,
+                              height: 80,
+                              child: Stack(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      showImageTagDialog(
+                                        context,
+                                        img,
+                                        routeModel,
+                                        availableTags: routeModel.tags,
+                                      ).then((_) {
+                                        setDialogState(() {}); // Refresh dialog
+                                      });
+                                    },
+                                    child: Image.file(
+                                      File(img.path),
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
-                                ),
-                                if (isDraggingThis && dragPosition != null)
                                   Positioned(
-                                    left: dragPosition!.dx - 40,
-                                    top: dragPosition!.dy - 40,
-                                    child: Material(
-                                      elevation: 4,
-                                      child: Image.file(
-                                        File(img.path),
-                                        width: 80,
-                                        height: 80,
-                                        fit: BoxFit.cover,
+                                    top: 0,
+                                    right: 0,
+                                    child: GestureDetector(
+                                      onTap: () async {
+                                        final file = File(img.path);
+                                        if (await file.exists()) {
+                                          await file.delete();
+                                        }
+                                        setDialogState(() {
+                                          routePoint.images.remove(img);
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.close,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
                                       ),
                                     ),
                                   ),
-                              ],
+                                  if (img.tags.isNotEmpty)
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      right: 0,
+                                      child: Container(
+                                        color: Colors.black54,
+                                        child: const Icon(
+                                          Icons.tag,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           );
-                        }).toList(),
+                        },
+                        onAccept: (droppedImg) {
+                          setDialogState(() {
+                            final oldIndex = routePoint.images.indexOf(droppedImg);
+                            routePoint.images.removeAt(oldIndex);
+                            routePoint.images.insert(index, droppedImg);
+                            for (int i = 0; i < routePoint.images.length; i++) {
+                              routePoint.images[i].order = i;
+                            }
+                          });
+                        },
                       );
-                    },
+                    }).toList(),
                   ),
                 ],
               ),
