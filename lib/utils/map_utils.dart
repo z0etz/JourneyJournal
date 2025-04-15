@@ -6,6 +6,7 @@ import 'package:journeyjournal/models/route_point.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:journeyjournal/utils/image_helper.dart';
+import '../models/image_data.dart';
 
 double distance(LatLng point1, LatLng point2) {
   return sqrt(
@@ -161,7 +162,11 @@ Future<void> showRoutePointDialog(
                         for (var image in pickedImages) {
                           String savedPath = await saveImageLocally(image);
                           setDialogState(() {
-                            routePoint.images.add(savedPath);
+                            routePoint.images.add(ImageData(
+                              path: savedPath,
+                              tags: ['highlight'],
+                              order: routePoint.images.length,
+                            ));
                           });
                         }
                       }
@@ -175,13 +180,13 @@ Future<void> showRoutePointDialog(
                     height: 100,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      children: routePoint.images.map((path) {
+                      children: routePoint.images.map((img) {
                         return Stack(
                           children: [
                             Padding(
                               padding: const EdgeInsets.all(4.0),
                               child: Image.file(
-                                File(path),
+                                File(img.path),
                                 width: 80,
                                 height: 80,
                                 fit: BoxFit.cover,
@@ -192,12 +197,12 @@ Future<void> showRoutePointDialog(
                               top: 0,
                               child: GestureDetector(
                                 onTap: () async {
-                                  final file = File(path);
+                                  final file = File(img.path);
                                   if (await file.exists()) {
                                     await file.delete();
                                   }
                                   setDialogState(() {
-                                    routePoint.images.remove(path);
+                                    routePoint.images.remove(img);
                                   });
                                 },
                                 child: Container(

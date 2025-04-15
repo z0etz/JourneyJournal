@@ -19,7 +19,7 @@ class RoutePointAdapter extends TypeAdapter<RoutePoint> {
     return RoutePoint(
       title: fields[1] as String,
       description: fields[2] as String,
-      images: (fields[3] as List).cast<String>(),
+      images: (fields[3] as List?)?.cast<ImageData>(),
       date: fields[4] as DateTime?,
       id: fields[5] as String,
     ).._point = (fields[0] as List).cast<double>();
