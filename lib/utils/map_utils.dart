@@ -84,6 +84,28 @@ void fitMapToRoute(
   }
 }
 
+Future<bool> showDeletePointConfirmationDialog(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: const Text('Are you sure you want to delete this point and all its associated data?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      );
+    },
+  ).then((value) => value ?? false);
+}
+
 Future<void> showImageTagDialog(
     BuildContext context,
     ImageData image,
@@ -398,9 +420,12 @@ Future<void> showRoutePointDialog(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TextButton(
-                    onPressed: () {
-                      onDelete();
-                      Navigator.pop(context);
+                    onPressed: () async {
+                      bool confirm = await showDeletePointConfirmationDialog(context);
+                      if (confirm) {
+                        onDelete();
+                        Navigator.pop(context);
+                      }
                     },
                     child: const Text(
                       "Delete",
