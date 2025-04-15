@@ -15,31 +15,23 @@ class RouteModel {
   List<RoutePoint> routePoints;
 
   @HiveField(3)
-  int startIndex;
+  String startPointId;
 
   @HiveField(4)
-  int endIndex;
+  String endPointId;
 
   RouteModel({
     required this.id,
     required this.name,
     List<RoutePoint>? routePoints,
-    int startIndex = 0,
-    int endIndex = -1,
+    String? startPointId,
+    String? endPointId,
   })  : routePoints = routePoints ?? [],
-        startIndex = startIndex >= 0 ? startIndex : 0,
-        endIndex = routePoints != null && routePoints.isNotEmpty
-            ? (endIndex >= 0 ? endIndex : routePoints.length - 1)
-            : 0 {
-    // Ensure valid indices
-    if (this.routePoints.isNotEmpty) {
-      this.startIndex = this.startIndex.clamp(0, this.routePoints.length - 1);
-      this.endIndex = this.endIndex.clamp(this.startIndex, this.routePoints.length - 1);
-    } else {
-      this.startIndex = 0;
-      this.endIndex = 0;
-    }
-  }
+        startPointId = startPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.first.id : ''),
+        endPointId = endPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.last.id : '');
+
+  int get startIndex => routePoints.indexWhere((p) => p.id == startPointId);
+  int get endIndex => routePoints.indexWhere((p) => p.id == endPointId);
 
   static Future<Box<RouteModel>> getRoutesBox() async {
     return await Hive.openBox<RouteModel>('routesBox');
@@ -66,13 +58,17 @@ class RouteModel {
   Future<void> save() async {
     final box = await RouteModel.getRoutesBox();
     if (routePoints.isNotEmpty) {
-      startIndex = startIndex.clamp(0, routePoints.length - 1);
-      endIndex = endIndex.clamp(startIndex, routePoints.length - 1);
+      if (!routePoints.any((p) => p.id == startPointId)) {
+        startPointId = routePoints.first.id;
+      }
+      if (!routePoints.any((p) => p.id == endPointId)) {
+        endPointId = routePoints.last.id;
+      }
     } else {
-      startIndex = 0;
-      endIndex = 0;
+      startPointId = '';
+      endPointId = '';
     }
-    box.put(id, this);
+    await box.put(id, this);
   }
 
   static Future<RouteModel> createNewRoute() async {
@@ -89,18 +85,18 @@ class RouteModel {
     for (var route in box.values) {
       bool needsSave = false;
       if (route.routePoints.isNotEmpty) {
-        if (route.startIndex < 0 || route.startIndex >= route.routePoints.length) {
-          route.startIndex = 0;
+        if (!route.routePoints.any((p) => p.id == route.startPointId)) {
+          route.startPointId = route.routePoints.first.id;
           needsSave = true;
         }
-        if (route.endIndex < route.startIndex || route.endIndex >= route.routePoints.length) {
-          route.endIndex = route.routePoints.length - 1;
+        if (!route.routePoints.any((p) => p.id == route.endPointId)) {
+          route.endPointId = route.routePoints.last.id;
           needsSave = true;
         }
       } else {
-        if (route.startIndex != 0 || route.endIndex != 0) {
-          route.startIndex = 0;
-          route.endIndex = 0;
+        if (route.startPointId.isNotEmpty || route.endPointId.isNotEmpty) {
+          route.startPointId = '';
+          route.endPointId = '';
           needsSave = true;
         }
       }
@@ -117,18 +113,18 @@ class RouteModel {
     if (route != null) {
       bool needsSave = false;
       if (route.routePoints.isNotEmpty) {
-        if (route.startIndex < 0 || route.startIndex >= route.routePoints.length) {
-          route.startIndex = 0;
+        if (!route.routePoints.any((p) => p.id == route.startPointId)) {
+          route.startPointId = route.routePoints.first.id;
           needsSave = true;
         }
-        if (route.endIndex < route.startIndex || route.endIndex >= route.routePoints.length) {
-          route.endIndex = route.routePoints.length - 1;
+        if (!route.routePoints.any((p) => p.id == route.endPointId)) {
+          route.endPointId = route.routePoints.last.id;
           needsSave = true;
         }
       } else {
-        if (route.startIndex != 0 || route.endIndex != 0) {
-          route.startIndex = 0;
-          route.endIndex = 0;
+        if (route.startPointId.isNotEmpty || route.endPointId.isNotEmpty) {
+          route.startPointId = '';
+          route.endPointId = '';
           needsSave = true;
         }
       }

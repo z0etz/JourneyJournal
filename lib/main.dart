@@ -14,7 +14,7 @@ void main() async {
   Hive.registerAdapter(LatLngAdapter());
 
   // Clear the box before opening it if changes to Hive storage have been made
-  // await Hive.deleteBoxFromDisk('routesBox');
+  await Hive.deleteBoxFromDisk('routesBox');
 
   await Hive.openBox<RouteModel>('routesBox');
   runApp(const MyApp());

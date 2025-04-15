@@ -70,7 +70,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     setState(() {
       if (_selectingStart) {
         if (index < currentRoute.endIndex) {
-          currentRoute.startIndex = index;
+          currentRoute.startPointId = currentRoute.routePoints[index].id;
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
@@ -78,18 +78,18 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           );
           _setInitialCirclePosition();
           currentRoute.save();
-          _selectingStart = false; // Exit selection mode
+          _selectingStart = false;
         }
       } else if (_selectingEnd) {
         if (index > currentRoute.startIndex) {
-          currentRoute.endIndex = index;
+          currentRoute.endPointId = currentRoute.routePoints[index].id;
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
             endIndex: currentRoute.endIndex,
           );
           currentRoute.save();
-          _selectingEnd = false; // Exit selection mode
+          _selectingEnd = false;
         }
       }
     });
@@ -207,10 +207,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _startSelectingStartPoint() {
     setState(() {
       if (_selectingStart) {
-        _selectingStart = false; // Cancel if already active
+        _selectingStart = false;
       } else {
         _selectingStart = true;
-        _selectingEnd = false; // Deactivate end selection
+        _selectingEnd = false;
       }
     });
   }
@@ -218,10 +218,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _startSelectingEndPoint() {
     setState(() {
       if (_selectingEnd) {
-        _selectingEnd = false; // Cancel if already active
+        _selectingEnd = false;
       } else {
         _selectingEnd = true;
-        _selectingStart = false; // Deactivate start selection
+        _selectingStart = false;
       }
     });
   }
@@ -229,7 +229,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _handleMapTap(TapPosition tapPosition, LatLng tappedPoint) {
     if (currentRoute.routePoints.isEmpty || _isSavingNotifier.value || _isAnimating || (!_selectingStart && !_selectingEnd)) return;
 
-    // Find closest route point within 50m
     int closestIndex = 0;
     double minDistance = double.infinity;
     for (int i = 0; i < currentRoute.routePoints.length; i++) {
@@ -245,14 +244,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       }
     }
 
-    // Verify tap is close enough
     if (minDistance >= 50) return;
 
     setState(() {
       if (_selectingStart) {
-        // Only set start if before endIndex
         if (closestIndex < currentRoute.endIndex) {
-          currentRoute.startIndex = closestIndex;
+          currentRoute.startPointId = currentRoute.routePoints[closestIndex].id;
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
@@ -263,9 +260,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           _selectingStart = false;
         }
       } else if (_selectingEnd) {
-        // Only set end if after startIndex
         if (closestIndex > currentRoute.startIndex) {
-          currentRoute.endIndex = closestIndex;
+          currentRoute.endPointId = currentRoute.routePoints[closestIndex].id;
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
@@ -413,9 +409,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               PolylineLayer(
                                 polylines: [
                                   Polyline(
-                                    points: currentRoute.routePoints
-                                        .map((routePoint) => routePoint.point)
-                                        .toList(),
+                                    points: currentRoute.routePoints.map((routePoint) => routePoint.point).toList(),
                                     color: Colors.blue,
                                     strokeWidth: 4.0,
                                   ),
@@ -555,18 +549,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   ElevatedButton(
-                                    onPressed: _isSavingNotifier.value || _isAnimating
-                                        ? null
-                                        : _startSelectingStartPoint,
+                                    onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingStartPoint,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: _selectingStart ? Colors.green[100] : null,
                                     ),
                                     child: const Text("Set Start Point"),
                                   ),
                                   ElevatedButton(
-                                    onPressed: _isSavingNotifier.value || _isAnimating
-                                        ? null
-                                        : _startSelectingEndPoint,
+                                    onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingEndPoint,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: _selectingEnd ? Colors.red[100] : null,
                                     ),

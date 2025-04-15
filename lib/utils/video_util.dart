@@ -38,24 +38,29 @@ void moveCircleAlongPath(
       int endIndex = -1,
     }) {
   if (route.routePoints.isEmpty) return;
+
   int effectiveEndIndex = endIndex == -1 ? route.routePoints.length - 1 : endIndex;
   effectiveEndIndex = effectiveEndIndex.clamp(startIndex, route.routePoints.length - 1);
-  if (effectiveEndIndex < startIndex) effectiveEndIndex = startIndex;
+
   List<LatLng> path = route.routePoints
       .sublist(startIndex, effectiveEndIndex + 1)
       .map((point) => point.point)
       .toList();
+
   if (path.isEmpty) return;
 
-  if (path.length == 1) {
+  if (progress <= 0.0) {
     circlePositionNotifier.value = path.first;
+    print("MoveCircle: progress=$progress, pos=${path.first}, startIndex=$startIndex");
+    return;
+  } else if (progress >= 1.0) {
+    circlePositionNotifier.value = path.last;
+    print("MoveCircle: progress=$progress, pos=${path.last}, endIndex=$effectiveEndIndex");
     return;
   }
 
   double distanceCovered = progress * totalDistance;
   double distanceSoFar = 0.0;
-  int segmentStartIndex = 0;
-  int segmentEndIndex = 1;
 
   for (int i = 0; i < path.length - 1; i++) {
     double segmentDistance = Geolocator.distanceBetween(
@@ -65,32 +70,19 @@ void moveCircleAlongPath(
       path[i + 1].longitude,
     );
     if (distanceSoFar + segmentDistance >= distanceCovered) {
-      segmentStartIndex = i;
-      segmentEndIndex = i + 1;
-      break;
+      double remainingDistance = distanceCovered - distanceSoFar;
+      double ratio = segmentDistance > 0 ? remainingDistance / segmentDistance : 0.0;
+      double lat = path[i].latitude + (path[i + 1].latitude - path[i].latitude) * ratio;
+      double lng = path[i].longitude + (path[i + 1].longitude - path[i].longitude) * ratio;
+      circlePositionNotifier.value = LatLng(lat, lng);
+      print("MoveCircle: progress=$progress, pos=($lat, $lng), segment=$i-${i + 1}");
+      return;
     }
     distanceSoFar += segmentDistance;
   }
-
-  LatLng startPoint = path[segmentStartIndex];
-  LatLng endPoint = path[segmentEndIndex];
-  double segmentDistance = Geolocator.distanceBetween(
-    startPoint.latitude,
-    startPoint.longitude,
-    endPoint.latitude,
-    endPoint.longitude,
-  );
-  double ratio = segmentDistance > 0
-      ? (distanceCovered - (distanceSoFar - segmentDistance)) / segmentDistance
-      : 0.0;
-  double lat = startPoint.latitude + (endPoint.latitude - startPoint.latitude) * ratio;
-  double lng = startPoint.longitude + (endPoint.longitude - startPoint.longitude) * ratio;
-
-  circlePositionNotifier.value = LatLng(lat, lng);
-  print("MoveCircle: progress=$progress, pos=($lat,$lng), segment=$segmentStartIndex-$segmentEndIndex");
+  circlePositionNotifier.value = path.last;
+  print("MoveCircle: progress=$progress, pos=${path.last}, reached end");
 }
-
-// ... (SaveButton unchanged for now)
 
 class SaveButton extends StatefulWidget {
   final GlobalKey mapKey;
@@ -264,7 +256,6 @@ class _SaveButtonState extends State<SaveButton> {
     )
         : 0.0;
 
-    // Reset state
     widget.markerSizeNotifier.value = 0.0;
     widget.saveDirectionNotifier.value = initialDirection;
     widget.circlePositionNotifier.value = startPoint;
