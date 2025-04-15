@@ -83,18 +83,25 @@ class _MainScreenState extends State<MainScreen> {
     return FutureBuilder<List<RouteModel>>(
       future: RouteModel.loadRoutes(),
       builder: (context, snapshot) {
-        RouteModel? displayRoute;
+        RouteModel displayRoute;
 
         if (widget.initialRoute != null) {
-          displayRoute = widget.initialRoute;
+          displayRoute = widget.initialRoute!;
           lastViewedRoute = displayRoute;
         } else if (lastViewedRoute != null) {
-          displayRoute = lastViewedRoute;
+          displayRoute = lastViewedRoute!;
         } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
           displayRoute = snapshot.data!.last;
           lastViewedRoute = displayRoute;
         } else {
-          displayRoute = null;
+          // Create a new route if none exist
+          displayRoute = RouteModel(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            name: RouteModel.getNewRouteName([]),
+          );
+          lastViewedRoute = displayRoute;
+          // Save the new route asynchronously
+          displayRoute.save();
         }
 
         switch (_selectedIndex) {

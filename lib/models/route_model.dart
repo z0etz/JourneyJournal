@@ -20,12 +20,20 @@ class RouteModel {
   @HiveField(4)
   String endPointId;
 
+  @HiveField(5)
+  bool snapStartToFirst;
+
+  @HiveField(6)
+  bool snapEndToLast;
+
   RouteModel({
     required this.id,
     required this.name,
     List<RoutePoint>? routePoints,
     String? startPointId,
     String? endPointId,
+    this.snapStartToFirst = true,
+    this.snapEndToLast = true,
   })  : routePoints = routePoints ?? [],
         startPointId = startPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.first.id : ''),
         endPointId = endPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.last.id : '');
@@ -58,17 +66,39 @@ class RouteModel {
   Future<void> save() async {
     final box = await RouteModel.getRoutesBox();
     if (routePoints.isNotEmpty) {
-      if (!routePoints.any((p) => p.id == startPointId)) {
+      // Handle snapping for start point
+      if (snapStartToFirst || startPointId.isEmpty || !routePoints.any((p) => p.id == startPointId)) {
         startPointId = routePoints.first.id;
+        snapStartToFirst = true;
+      } else if (startPointId == routePoints.first.id) {
+        snapStartToFirst = true;
       }
-      if (!routePoints.any((p) => p.id == endPointId)) {
+      // Handle snapping for end point
+      if (snapEndToLast || endPointId.isEmpty || !routePoints.any((p) => p.id == endPointId)) {
         endPointId = routePoints.last.id;
+        snapEndToLast = true;
+      } else if (endPointId == routePoints.last.id) {
+        snapEndToLast = true;
       }
     } else {
       startPointId = '';
       endPointId = '';
+      snapStartToFirst = true;
+      snapEndToLast = true;
     }
     await box.put(id, this);
+  }
+
+  void setStartPointId(String newId) {
+    startPointId = newId;
+    snapStartToFirst = routePoints.isNotEmpty && newId == routePoints.first.id;
+    save();
+  }
+
+  void setEndPointId(String newId) {
+    endPointId = newId;
+    snapEndToLast = routePoints.isNotEmpty && newId == routePoints.last.id;
+    save();
   }
 
   static Future<RouteModel> createNewRoute() async {
@@ -85,18 +115,28 @@ class RouteModel {
     for (var route in box.values) {
       bool needsSave = false;
       if (route.routePoints.isNotEmpty) {
-        if (!route.routePoints.any((p) => p.id == route.startPointId)) {
+        if (route.snapStartToFirst || route.startPointId.isEmpty || !route.routePoints.any((p) => p.id == route.startPointId)) {
           route.startPointId = route.routePoints.first.id;
+          route.snapStartToFirst = true;
+          needsSave = true;
+        } else if (route.startPointId == route.routePoints.first.id) {
+          route.snapStartToFirst = true;
           needsSave = true;
         }
-        if (!route.routePoints.any((p) => p.id == route.endPointId)) {
+        if (route.snapEndToLast || route.endPointId.isEmpty || !route.routePoints.any((p) => p.id == route.endPointId)) {
           route.endPointId = route.routePoints.last.id;
+          route.snapEndToLast = true;
+          needsSave = true;
+        } else if (route.endPointId == route.routePoints.last.id) {
+          route.snapEndToLast = true;
           needsSave = true;
         }
       } else {
         if (route.startPointId.isNotEmpty || route.endPointId.isNotEmpty) {
           route.startPointId = '';
           route.endPointId = '';
+          route.snapStartToFirst = true;
+          route.snapEndToLast = true;
           needsSave = true;
         }
       }
@@ -113,18 +153,28 @@ class RouteModel {
     if (route != null) {
       bool needsSave = false;
       if (route.routePoints.isNotEmpty) {
-        if (!route.routePoints.any((p) => p.id == route.startPointId)) {
+        if (route.snapStartToFirst || route.startPointId.isEmpty || !route.routePoints.any((p) => p.id == route.startPointId)) {
           route.startPointId = route.routePoints.first.id;
+          route.snapStartToFirst = true;
+          needsSave = true;
+        } else if (route.startPointId == route.routePoints.first.id) {
+          route.snapStartToFirst = true;
           needsSave = true;
         }
-        if (!route.routePoints.any((p) => p.id == route.endPointId)) {
+        if (route.snapEndToLast || route.endPointId.isEmpty || !route.routePoints.any((p) => p.id == route.endPointId)) {
           route.endPointId = route.routePoints.last.id;
+          route.snapEndToLast = true;
+          needsSave = true;
+        } else if (route.endPointId == route.routePoints.last.id) {
+          route.snapEndToLast = true;
           needsSave = true;
         }
       } else {
         if (route.startPointId.isNotEmpty || route.endPointId.isNotEmpty) {
           route.startPointId = '';
           route.endPointId = '';
+          route.snapStartToFirst = true;
+          route.snapEndToLast = true;
           needsSave = true;
         }
       }

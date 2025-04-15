@@ -69,26 +69,24 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _handleMarkerTap(int index) {
     setState(() {
       if (_selectingStart) {
-        if (index < currentRoute.endIndex) {
-          currentRoute.startPointId = currentRoute.routePoints[index].id;
+        if (currentRoute.endIndex == -1 || index < currentRoute.endIndex) {
+          currentRoute.setStartPointId(currentRoute.routePoints[index].id);
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
             endIndex: currentRoute.endIndex,
           );
           _setInitialCirclePosition();
-          currentRoute.save();
           _selectingStart = false;
         }
       } else if (_selectingEnd) {
-        if (index > currentRoute.startIndex) {
-          currentRoute.endPointId = currentRoute.routePoints[index].id;
+        if (currentRoute.startIndex == -1 || index > currentRoute.startIndex) {
+          currentRoute.setEndPointId(currentRoute.routePoints[index].id);
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
             endIndex: currentRoute.endIndex,
           );
-          currentRoute.save();
           _selectingEnd = false;
         }
       }
@@ -98,11 +96,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    _loadRoute();
+    currentRoute = widget.initialRoute ?? RouteModel(id: '', name: ''); // Fallback only for safety
     _animationController = AnimationController(
       vsync: this,
       duration: _animationDuration,
     );
+    _loadRoute();
   }
 
   Future<void> _loadRoute() async {
@@ -248,26 +247,24 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
     setState(() {
       if (_selectingStart) {
-        if (closestIndex < currentRoute.endIndex) {
-          currentRoute.startPointId = currentRoute.routePoints[closestIndex].id;
+        if (currentRoute.endIndex == -1 || closestIndex < currentRoute.endIndex) {
+          currentRoute.setStartPointId(currentRoute.routePoints[closestIndex].id);
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
             endIndex: currentRoute.endIndex,
           );
           _setInitialCirclePosition();
-          currentRoute.save();
           _selectingStart = false;
         }
       } else if (_selectingEnd) {
-        if (closestIndex > currentRoute.startIndex) {
-          currentRoute.endPointId = currentRoute.routePoints[closestIndex].id;
+        if (currentRoute.startIndex == -1 || closestIndex > currentRoute.startIndex) {
+          currentRoute.setEndPointId(currentRoute.routePoints[closestIndex].id);
           _totalDistance = calculateTotalDistance(
             currentRoute,
             startIndex: currentRoute.startIndex,
             endIndex: currentRoute.endIndex,
           );
-          currentRoute.save();
           _selectingEnd = false;
         }
       }
