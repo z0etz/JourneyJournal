@@ -79,6 +79,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           );
           _setInitialCirclePosition();
           _selectingStart = false;
+          if (!_showWholeRoute) {
+            _fitMapToRoute();
+          }
         }
       } else if (_selectingEnd) {
         if (currentRoute.startIndex == -1 || index > currentRoute.startIndex) {
@@ -89,6 +92,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
             endIndex: currentRoute.endIndex,
           );
           _selectingEnd = false;
+          if (!_showWholeRoute) {
+            _fitMapToRoute();
+          }
         }
       }
     });
@@ -137,6 +143,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _mapController,
       currentRoute.routePoints.map((rp) => rp.point).toList(),
       isAnimationScreen: true,
+      startIndex: _showWholeRoute ? null : currentRoute.startIndex,
+      endIndex: _showWholeRoute ? null : currentRoute.endIndex,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -257,6 +265,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           );
           _setInitialCirclePosition();
           _selectingStart = false;
+          if (!_showWholeRoute) {
+            _fitMapToRoute();
+          }
         }
       } else if (_selectingEnd) {
         if (currentRoute.startIndex == -1 || closestIndex > currentRoute.startIndex) {
@@ -268,6 +279,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           );
           _setInitialCirclePosition();
           _selectingEnd = false;
+          if (!_showWholeRoute) {
+            _fitMapToRoute();
+          }
         }
       }
     });
@@ -406,15 +420,15 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         : currentRoute.routePoints.map((rp) => rp.point).toList();
 
     return [
-      PolylineLayer(
-        polylines: [
-          Polyline(
-            points: effectivePoints,
-            color: Colors.blue,
-            strokeWidth: 4.0,
-          ),
-        ],
-      ),
+    PolylineLayer(
+    polylines: [
+    Polyline(
+    points: effectivePoints,
+    color: Colors.blue,
+    strokeWidth: 4.0,
+    ),
+    ],
+    ),
     ];
   }
 
@@ -689,6 +703,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                         : (value) {
                                       setState(() {
                                         _showWholeRoute = value;
+                                        _fitMapToRoute();
                                       });
                                     },
                                   ),
