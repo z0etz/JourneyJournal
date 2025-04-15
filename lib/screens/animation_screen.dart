@@ -46,7 +46,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
-  final Duration _animationDuration = const Duration(seconds: 10);
+  final Duration _animationDuration = const Duration(seconds: 5);
   double _totalDistance = 0.0;
   static const double markerBaseSize = 25.0;
 
@@ -272,8 +272,21 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _animateMarker() {
-    if (!_isAnimating || currentRoute.routePoints.isEmpty) return;
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    if (!_isAnimating || currentRoute.routePoints.length < 2 || currentRoute.startIndex < 0 || currentRoute.endIndex <= currentRoute.startIndex || currentRoute.endIndex >= currentRoute.routePoints.length) {
+      setState(() {
+        _isAnimating = false;
+      });
+      return;
+    }
+
+    // Use a local preview duration that's 2 seconds shorter than _animationDuration
+    final previewDuration = Duration(
+      milliseconds: _animationDuration.inMilliseconds - 2000,
+    );
+    // Calculate the scale factor to compress the animation
+    final scaleFactor = previewDuration.inMilliseconds / _animationDuration.inMilliseconds;
+
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0 / scaleFactor).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Curves.linear,
@@ -283,9 +296,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _markerSizeNotifier.value = markerBaseSize;
     LatLng? lastPosition;
     _progressAnimation.addListener(() {
-      print("Animation progress: ${_progressAnimation.value}, start: ${currentRoute.startIndex}, end: ${currentRoute.endIndex}, pos: ${_circlePositionNotifier.value}");
+      // Scale the progress to match the full range in the shorter duration
+      double scaledProgress = _progressAnimation.value * scaleFactor;
+      print("Animation progress: $scaledProgress, raw: ${_progressAnimation.value}, start: ${currentRoute.startIndex}, end: ${currentRoute.endIndex}, pos: ${_circlePositionNotifier.value}");
       moveCircleAlongPath(
-        _progressAnimation.value,
+        scaledProgress,
         currentRoute,
         _circlePositionNotifier,
         _totalDistance,
@@ -566,8 +581,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               Slider(
                                 value: _animationController.duration!.inSeconds.toDouble(),
                                 min: 5,
-                                max: 24,
-                                divisions: 19,
+                                max: 60,
+                                divisions: 56,
                                 label: "${_animationController.duration!.inSeconds}s",
                                 onChanged: _isSavingNotifier.value
                                     ? null

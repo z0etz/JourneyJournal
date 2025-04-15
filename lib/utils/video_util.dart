@@ -230,7 +230,7 @@ class _SaveButtonState extends State<SaveButton> {
     int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
-    const int zoomFrames = 45;
+    const int zoomFrames = 30;
     final int followFrames = totalFrames - 2 * zoomFrames;
     LatLng? fittedCenter;
     final LatLng startPoint = widget.currentRoute.routePoints[widget.currentRoute.startIndex].point;

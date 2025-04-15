@@ -36,24 +36,23 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadRoute() async {
     if (widget.initialRoute != null) {
       currentRoute = widget.initialRoute!;
-      print("Map screen route: ${widget.initialRoute?.name ?? 'No route'}");
+      print("MapScreen: Loaded initialRoute=${currentRoute.name}");
     } else {
-      // Fetch the saved routes asynchronously
+      // Fallback: load saved routes, should rarely happen as MainScreen provides initialRoute
       var savedRoutes = await RouteModel.loadRoutes();
       if (savedRoutes.isEmpty) {
-        currentRoute = await RouteModel
-            .createNewRoute(); // Await to create and save a new route
-        print("Map screen new route: No saved routes");
+        currentRoute = await RouteModel.createNewRoute();
+        print("MapScreen: Created new route=${currentRoute.name}");
       } else {
         currentRoute = savedRoutes.last;
-        print("Map screen last route: ${savedRoutes.last.name}");
+        print("MapScreen: Loaded last saved route=${currentRoute.name}");
       }
     }
     _routeNameController = TextEditingController(text: currentRoute.name);
     setState(() {}); // Refresh the UI after loading the route
 
     if (currentRoute.routePoints.isNotEmpty) {
-      Future.delayed(const Duration(milliseconds:50), _fitMapToRoute);
+      Future.delayed(const Duration(milliseconds: 50), _fitMapToRoute);
     }
   }
 

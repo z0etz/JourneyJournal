@@ -63,7 +63,7 @@ class _MainScreenState extends State<MainScreen> {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.3),
+                  color: Colors.grey.withValues(alpha: 0.3),
                   boxShadow: const [
                     BoxShadow(
                       color: Colors.black12,
@@ -83,25 +83,36 @@ class _MainScreenState extends State<MainScreen> {
     return FutureBuilder<List<RouteModel>>(
       future: RouteModel.loadRoutes(),
       builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          // Show a loading state while waiting for routes
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        List<RouteModel> savedRoutes = snapshot.data!;
         RouteModel displayRoute;
 
         if (widget.initialRoute != null) {
           displayRoute = widget.initialRoute!;
           lastViewedRoute = displayRoute;
+          print("MainScreen: Using initialRoute=${displayRoute.name}");
         } else if (lastViewedRoute != null) {
           displayRoute = lastViewedRoute!;
-        } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-          displayRoute = snapshot.data!.last;
+          print("MainScreen: Using lastViewedRoute=${displayRoute.name}");
+        } else if (savedRoutes.isNotEmpty) {
+          displayRoute = savedRoutes.last;
           lastViewedRoute = displayRoute;
+          print("MainScreen: Using last saved route=${displayRoute.name}");
         } else {
-          // Create a new route if none exist
           displayRoute = RouteModel(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            id: DateTime
+                .now()
+                .millisecondsSinceEpoch
+                .toString(),
             name: RouteModel.getNewRouteName([]),
           );
           lastViewedRoute = displayRoute;
-          // Save the new route asynchronously
           displayRoute.save();
+          print("MainScreen: Created new route=${displayRoute.name}");
         }
 
         switch (_selectedIndex) {
