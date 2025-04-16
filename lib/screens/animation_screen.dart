@@ -532,6 +532,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     final int startIndex = currentRoute.startIndex;
     final int endIndex = currentRoute.endIndex;
 
+    // Route point markers
     for (int i = 0; i < currentRoute.routePoints.length; i++) {
       if (isSaving && !_showWholeRoute && (i < startIndex || i > endIndex)) {
         continue;
@@ -591,7 +592,44 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       );
     }
 
+    // Moving marker
+    if (isSaving) {
+      markers.add(
+        Marker(
+          point: _circlePositionNotifier.value,
+          width: _markerSizeNotifier.value,
+          height: _markerSizeNotifier.value,
+          child: Transform.rotate(
+            angle: _saveDirectionNotifier.value,
+            child: Icon(
+              Icons.navigation,
+              color: Colors.orange,
+              size: _markerSizeNotifier.value,
+            ),
+          ),
+        ),
+      );
+    } else {
+      markers.add(
+        Marker(
+          point: _circlePositionNotifier.value,
+          width: _markerSizeNotifier.value,
+          height: _markerSizeNotifier.value,
+          child: Transform.rotate(
+            angle: _directionNotifier.value,
+            child: Icon(
+              Icons.navigation,
+              color: Colors.orange,
+              size: _markerSizeNotifier.value,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Image marker
     if (_isImageDisplayed && _currentImages.isNotEmpty && _currentImageIndex < _currentImages.length) {
+      print('Building image marker: index=$_currentImageIndex, progress=$_imageDisplayProgress');
       final renderObject = repaintBoundaryKey.currentContext?.findRenderObject();
       double widgetWidth = 576.0;
       double widgetHeight = 1024.0;
@@ -726,6 +764,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   @override
   void dispose() {
+    _isSavingNotifier.value = false;
     _isSavingNotifier.dispose();
     _circlePositionNotifier.dispose();
     _markerSizeNotifier.dispose();
@@ -828,84 +867,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               builder: (context, isSaving, child) {
                                 return MarkerLayer(
                                   markers: _buildMarkers(isSaving: isSaving),
-                                );
-                              },
-                            ),
-                            ValueListenableBuilder<bool>(
-                              valueListenable: _isSavingNotifier,
-                              builder: (context, isSaving, child) {
-                                if (isSaving) return const SizedBox.shrink();
-                                return ValueListenableBuilder<LatLng>(
-                                  valueListenable: _circlePositionNotifier,
-                                  builder: (context, position, child) {
-                                    return ValueListenableBuilder<double>(
-                                      valueListenable: _markerSizeNotifier,
-                                      builder: (context, size, child) {
-                                        return ValueListenableBuilder<double>(
-                                          valueListenable: _directionNotifier,
-                                          builder: (context, direction, child) {
-                                            return MarkerLayer(
-                                              markers: [
-                                                if (size > 0.0)
-                                                  Marker(
-                                                    point: position,
-                                                    width: size,
-                                                    height: size,
-                                                    child: Transform.rotate(
-                                                      angle: direction,
-                                                      child: Icon(
-                                                        Icons.navigation,
-                                                        color: Colors.orange,
-                                                        size: size,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            );
-                                          },
-                                        );
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                            ValueListenableBuilder<bool>(
-                              valueListenable: _isSavingNotifier,
-                              builder: (context, isSaving, child) {
-                                if (!isSaving) return const SizedBox.shrink();
-                                return ValueListenableBuilder<LatLng>(
-                                  valueListenable: _circlePositionNotifier,
-                                  builder: (context, position, child) {
-                                    return ValueListenableBuilder<double>(
-                                      valueListenable: _markerSizeNotifier,
-                                      builder: (context, size, child) {
-                                        return ValueListenableBuilder<double>(
-                                          valueListenable: _saveDirectionNotifier,
-                                          builder: (context, direction, child) {
-                                            return MarkerLayer(
-                                              markers: [
-                                                if (size > 0.0)
-                                                  Marker(
-                                                    point: position,
-                                                    width: size,
-                                                    height: size,
-                                                    child: Transform.rotate(
-                                                      angle: direction,
-                                                      child: Icon(
-                                                        Icons.navigation,
-                                                        color: Colors.orange,
-                                                        size: size,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            );
-                                          },
-                                        );
-                                      },
-                                    );
-                                  },
                                 );
                               },
                             ),
@@ -1076,6 +1037,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   currentImageScale: _currentImageScale,
                                   nextImageOpacity: _nextImageOpacity,
                                   nextImageScale: _nextImageScale,
+                                  cancelSaving: () => _isSavingNotifier.value = false,
                                 ),
                               ),
                             ],

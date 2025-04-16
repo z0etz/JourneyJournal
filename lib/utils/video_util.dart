@@ -122,6 +122,7 @@ class SaveButton extends StatefulWidget {
   final ValueNotifier<double> currentImageScale;
   final ValueNotifier<double> nextImageOpacity;
   final ValueNotifier<double> nextImageScale;
+  final VoidCallback? cancelSaving;
 
   const SaveButton({
     required this.mapKey,
@@ -151,6 +152,7 @@ class SaveButton extends StatefulWidget {
     required this.currentImageScale,
     required this.nextImageOpacity,
     required this.nextImageScale,
+    this.cancelSaving,
     super.key,
   });
 
@@ -228,6 +230,7 @@ class _SaveButtonState extends State<SaveButton> {
     final frameDir = await _getTempFrameDir();
     final framePath = '${frameDir.path}/frame_$frameIndex.png';
     await File(framePath).writeAsBytes(pngBytes);
+    print('Captured frame $frameIndex: $framePath');
     return framePath;
   }
 
@@ -254,6 +257,13 @@ class _SaveButtonState extends State<SaveButton> {
     double s = t - 1;
     double bounce = c * s * s * (s + 1);
     return 0.1 + 0.9 * t + bounce;
+  }
+
+  Future<void> _cleanup() async {
+    await FlutterQuickVideoEncoder.finish();
+    final frameDir = await _getTempFrameDir();
+    if (await frameDir.exists()) await frameDir.delete(recursive: true);
+    widget.onSaveComplete?.call();
   }
 
   Future<void> _saveAnimation() async {
@@ -329,10 +339,8 @@ class _SaveButtonState extends State<SaveButton> {
     bool isLastImageFading = false;
 
     for (int frame = 0; frame < totalFrames; frame++) {
-      if (!widget.isSavingNotifier.value) {
-        final frameDir = await _getTempFrameDir();
-        if (await frameDir.exists()) await frameDir.delete(recursive: true);
-        widget.onSaveComplete?.call();
+      if (!widget.isSavingNotifier.value || !mounted) {
+        await _cleanup();
         return;
       }
 
@@ -417,9 +425,9 @@ class _SaveButtonState extends State<SaveButton> {
               currentImageIndex++;
               nextImageIndex = currentImageIndex + 1 < currentImages.length ? currentImageIndex + 1 : -1;
               isLastImageFading = currentImageIndex == currentImages.length - 1;
+              imageDisplayProgress = 0.0;
               widget.setCurrentImageIndex(currentImageIndex);
               widget.setNextImageIndex(nextImageIndex);
-              imageDisplayProgress = 0.0;
               widget.setImageDisplayProgress(imageDisplayProgress);
               widget.currentImageOpacity.value = 0.0;
               widget.currentImageScale.value = 0.0;
@@ -483,10 +491,12 @@ class _SaveButtonState extends State<SaveButton> {
         }
       }
 
-      setState(() {});
-      await Future.delayed(Duration(milliseconds: (1000 ~/ 30)));
+      if (mounted) {
+        setState(() {});
+      }
       String framePath = await _captureFrame(frame);
       if (framePath.isNotEmpty) framePaths.add(framePath);
+      print('Frame $frame: isPaused=$isPaused, movementFrame=$movementFrameCount, pauseFrame=$pauseFrameCount, imageProgress=$imageDisplayProgress');
     }
 
     if (framePaths.isNotEmpty) {
@@ -508,11 +518,8 @@ class _SaveButtonState extends State<SaveButton> {
       );
 
       for (String framePath in framePaths) {
-        if (!widget.isSavingNotifier.value) {
-          await FlutterQuickVideoEncoder.finish();
-          widget.onSaveComplete?.call();
-          final frameDir = await _getTempFrameDir();
-          if (await frameDir.exists()) await frameDir.delete(recursive: true);
+        if (!widget.isSavingNotifier.value || !mounted) {
+          await _cleanup();
           return;
         }
         await _encodeFrame(framePath);
@@ -531,7 +538,7 @@ class _SaveButtonState extends State<SaveButton> {
         );
       }
     } else {
-      widget.onSaveComplete?.call();
+      await _cleanup();
     }
   }
 
