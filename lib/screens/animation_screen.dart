@@ -34,6 +34,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   String _selectedAspectRatio = "9:16";
   bool _selectingStart = false;
   bool _selectingEnd = false;
+  bool _isImageDisplayed = false;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -250,11 +251,13 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _currentImages = [];
       _isPaused = false;
       _isLastImageFading = false;
+      _isImageDisplayed = false;
       if (currentRoute.routePoints.isNotEmpty) {
         _circlePositionNotifier.value = currentRoute.routePoints[currentRoute.startIndex].point;
       }
       _markerSizeNotifier.value = 0.0;
-      double initialDirection = currentRoute.startIndex < currentRoute.endIndex && currentRoute.startIndex + 1 < currentRoute.routePoints.length
+      double initialDirection = currentRoute.startIndex < currentRoute.endIndex &&
+          currentRoute.startIndex + 1 < currentRoute.routePoints.length
           ? atan2(
         currentRoute.routePoints[currentRoute.startIndex + 1].point.longitude -
             currentRoute.routePoints[currentRoute.startIndex].point.longitude,
@@ -302,11 +305,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _handleMapTap(TapPosition tapPosition, LatLng tappedPoint) {
-    if (currentRoute.routePoints.isEmpty || _isSavingNotifier.value || _isAnimating || (!_selectingStart && !_selectingEnd)) return;
+    if (currentRoute.routePoints.isEmpty ||
+        _isSavingNotifier.value ||
+        _isAnimating ||
+        (!_selectingStart && !_selectingEnd)) return;
 
     int closestIndex = 0;
     double minDistance = double.infinity;
-    for (int i = 0; i < currentRoute.routePoints.length; i++) {
+    for ( int i = 0; i < currentRoute.routePoints.length; i++) {
       double distance = Geolocator.distanceBetween(
         tappedPoint.latitude,
         tappedPoint.longitude,
@@ -366,12 +372,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       return;
     }
 
-    final previewDuration = Duration(
-      milliseconds: _animationDuration.inMilliseconds - 2000,
-    );
-    final scaleFactor = previewDuration.inMilliseconds / _animationDuration.inMilliseconds;
-
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0 / scaleFactor).animate(
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Curves.linear,
@@ -383,9 +384,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _progressAnimation.addListener(() {
       if (_isPaused && !_isLastImageFading) return;
 
-      double scaledProgress = _progressAnimation.value * scaleFactor;
+      double progress = _progressAnimation.value;
       moveCircleAlongPath(
-        scaledProgress,
+        progress,
         currentRoute,
         _circlePositionNotifier,
         _totalDistance,
@@ -393,7 +394,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         endIndex: currentRoute.endIndex,
       );
       LatLng currentPosition = _circlePositionNotifier.value;
-      _directionNotifier.value = calculateDirection(lastPosition, currentPosition, defaultDirection: _directionNotifier.value);
+      _directionNotifier.value =
+          calculateDirection(lastPosition, currentPosition, defaultDirection: _directionNotifier.value);
       lastPosition = currentPosition;
 
       // Check for pause at image points
@@ -419,6 +421,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _nextImageIndex = -1;
       _isPaused = false;
       _isLastImageFading = false;
+      _isImageDisplayed = false;
       _currentImageController.reset();
       _nextImageController.reset();
       if (currentRoute.endIndex > currentRoute.startIndex && currentRoute.endIndex < currentRoute.routePoints.length) {
@@ -440,6 +443,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   void _pauseAndShowImages(RoutePoint point) async {
     setState(() {
       _isPaused = true;
+      _isImageDisplayed = true;
       _currentImages = point.images;
       _currentImageIndex = 0;
       _nextImageIndex = -1;
@@ -476,6 +480,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
     setState(() {
       _isPaused = false;
+      _isImageDisplayed = false;
       _currentImages = [];
       _currentImageIndex = 0;
       _nextImageIndex = -1;
@@ -500,7 +505,50 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         imagePoint.point.longitude,
       );
       if (distance < 50 && !_isPaused) {
-        _pauseAndShowImages(imagePoint);
+        setState(() {
+          _isPaused = true;
+          _isImageDisplayed = true;
+          _currentImages = imagePoint.images;
+          _currentImageIndex = 0;
+          _nextImageIndex = -1;
+          _isLastImageFading = false;
+          _circlePositionNotifier.value = imagePoint.point;
+        });
+
+        for (int i = 0; i < _currentImages.length; i++) {
+          setState(() {
+            _currentImageIndex = i;
+            _nextImageIndex = i + 1 < _currentImages.length ? i + 1 : -1;
+            _isLastImageFading = i == _currentImages.length - 1;
+          });
+
+          await _currentImageController.forward();
+          await Future.delayed(const Duration(seconds: 2));
+          if (_nextImageIndex >= 0) {
+            _nextImageController.forward();
+          }
+          await _currentImageController.reverse();
+
+          if (_nextImageIndex >= 0) {
+            setState(() {
+              _currentImageIndex = _nextImageIndex;
+              _nextImageIndex = _nextImageIndex + 1 < _currentImages.length ? _nextImageIndex + 1 : -1;
+              _isLastImageFading = _nextImageIndex == -1;
+            });
+            _currentImageController.value = 1.0;
+            _nextImageController.reset();
+          }
+        }
+
+        setState(() {
+          _isPaused = false;
+          _isImageDisplayed = false;
+          _currentImages = [];
+          _currentImageIndex = 0;
+          _nextImageIndex = -1;
+          _isLastImageFading = false;
+          _currentImagePointIndex++;
+        });
       }
     }
   }
@@ -568,6 +616,70 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         ),
       );
     }
+
+    // Add image marker
+    if (_isImageDisplayed && _currentImages.isNotEmpty && _currentImageIndex < _currentImages.length) {
+      // Calculate bottom center of the map
+      LatLngBounds? bounds = _mapController.camera.visibleBounds;
+      if (bounds != null) {
+        double bottomLat = bounds.south;
+        double centerLng = (bounds.west + bounds.east) / 2;
+        markers.add(
+          Marker(
+            point: LatLng(bottomLat + 0.001, centerLng),
+            width: 100.0,
+            height: 100.0,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _currentImageController,
+                  builder: (context, _) {
+                    return Opacity(
+                      opacity: _currentOpacityAnimation.value,
+                      child: Transform.scale(
+                        scale: _currentScaleAnimation.value,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(_currentImages[_currentImageIndex].path),
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (_nextImageIndex >= 0 && _nextImageIndex < _currentImages.length)
+                  AnimatedBuilder(
+                    animation: _nextImageController,
+                    builder: (context, _) {
+                      return Opacity(
+                        opacity: _nextOpacityAnimation.value,
+                        child: Transform.scale(
+                          scale: _nextScaleAnimation.value,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(_currentImages[_nextImageIndex].path),
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      }
+    }
+
     return markers;
   }
 
@@ -577,7 +689,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     final int startIndex = currentRoute.startIndex;
     final int endIndex = currentRoute.endIndex;
 
-    final effectivePoints = (isSaving && !_showWholeRoute && startIndex >= 0 && endIndex < currentRoute.routePoints.length && startIndex <= endIndex)
+    final effectivePoints = (isSaving && !_showWholeRoute &&
+        startIndex >= 0 &&
+        endIndex < currentRoute.routePoints.length &&
+        startIndex <= endIndex)
         ? currentRoute.routePoints.sublist(startIndex, endIndex + 1).map((rp) => rp.point).toList()
         : currentRoute.routePoints.map((rp) => rp.point).toList();
 
@@ -783,65 +898,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 ),
               ),
             ),
-            if (_currentImages.isNotEmpty && _currentImageIndex < _currentImages.length)
-              Positioned(
-                bottom: 20,
-                left: 20,
-                right: 20,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _currentImageController,
-                      builder: (context, _) {
-                        return Opacity(
-                          opacity: _currentOpacityAnimation.value,
-                          child: Transform.scale(
-                            scale: _currentScaleAnimation.value,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(_currentImages[_currentImageIndex].path),
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    if (_nextImageIndex >= 0 && _nextImageIndex < _currentImages.length)
-                      AnimatedBuilder(
-                        animation: _nextImageController,
-                        builder: (context, _) {
-                          return Opacity(
-                            opacity: _nextOpacityAnimation.value,
-                            child: Transform.scale(
-                              scale: _nextScaleAnimation.value,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(
-                                  File(_currentImages[_nextImageIndex].path),
-                                  width: 100,
-                                  height: 100,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
             if (_isControlsExpanded)
               Positioned(
                 top: 0,
                 left: 10.0,
                 right: 10.0,
                 child: Material(
-                  color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
+                  color:
+                  (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
                   child: Stack(
                     children: [
                       Container(

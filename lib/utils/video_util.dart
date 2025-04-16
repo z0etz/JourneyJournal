@@ -288,6 +288,18 @@ class _SaveButtonState extends State<SaveButton> {
     widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(0.0);
 
     LatLng? lastPosition;
+    double animationProgress = 0.0;
+    int currentImagePointIndex = 0;
+    bool isPaused = false;
+    int pauseFrameCount = 0;
+    int imagesShown = 0;
+    int totalImages = widget.currentRoute.routePoints
+        .sublist(
+        widget.currentRoute.startIndex,
+        widget.currentRoute.endIndex == -1
+            ? widget.currentRoute.routePoints.length
+            : widget.currentRoute.endIndex + 1)
+        .fold(0, (sum, point) => sum + point.images.length);
 
     for (int frame = 0; frame < totalFrames; frame++) {
       if (!widget.isSavingNotifier.value) {
@@ -297,45 +309,88 @@ class _SaveButtonState extends State<SaveButton> {
         return;
       }
 
-      double progress;
+      double t = frame / (totalFrames - 1).toDouble();
+
       if (frame < zoomFrames) {
-        progress = 0.0;
+        animationProgress = 0.0;
         widget.saveDirectionNotifier.value = initialDirection;
       } else if (frame < zoomFrames + followFrames) {
-        double followT = (frame - zoomFrames) / followFrames.toDouble();
-        progress = followT.clamp(0.0, 1.0);
+        if (!isPaused) {
+          double followT = (frame - zoomFrames) / followFrames.toDouble();
+          animationProgress = followT.clamp(0.0, 1.0);
+        }
       } else {
-        progress = 1.0;
+        animationProgress = 1.0;
         widget.saveDirectionNotifier.value = finalDirection;
       }
 
-      // Scale progress to account for total duration
-      double scaledProgress = progress * (widget.animationController.duration!.inMilliseconds / widget.totalDuration.inMilliseconds);
+      // Check for image pauses
+      if (currentImagePointIndex < widget.currentRoute.routePoints.length &&
+          !isPaused &&
+          frame >= zoomFrames &&
+          frame < zoomFrames + followFrames) {
+        final point = widget.currentRoute.routePoints[
+        widget.currentRoute.startIndex + currentImagePointIndex];
+        if (point.images.isNotEmpty) {
+          double segmentProgress = animationProgress * _totalDistance;
+          double distanceSoFar = 0.0;
+          for (int i = widget.currentRoute.startIndex; i < widget.currentRoute.endIndex; i++) {
+            distanceSoFar += Geolocator.distanceBetween(
+              widget.currentRoute.routePoints[i].point.latitude,
+              widget.currentRoute.routePoints[i].point.longitude,
+              widget.currentRoute.routePoints[i + 1].point.latitude,
+              widget.currentRoute.routePoints[i + 1].point.longitude,
+            );
+            if (distanceSoFar >= segmentProgress) {
+              if (i == widget.currentRoute.startIndex + currentImagePointIndex) {
+                isPaused = true;
+                pauseFrameCount = 0;
+                widget.circlePositionNotifier.value = point.point;
+                break;
+              }
+              break;
+            }
+          }
+        }
+      }
 
-      widget.animationController.value = scaledProgress;
-      moveCircleAlongPath(
-        scaledProgress,
-        widget.currentRoute,
-        widget.circlePositionNotifier,
-        _totalDistance,
-        startIndex: widget.currentRoute.startIndex,
-        endIndex: widget.currentRoute.endIndex,
-      );
+      if (isPaused) {
+        pauseFrameCount++;
+        // 3 seconds per image at 30fps = 90 frames
+        int imagesAtPoint = widget.currentRoute.routePoints[widget.currentRoute.startIndex + currentImagePointIndex].images.length;
+        if (pauseFrameCount >= 90 * imagesAtPoint) {
+          isPaused = false;
+          pauseFrameCount = 0;
+          imagesShown += imagesAtPoint;
+          currentImagePointIndex++;
+        }
+      } else {
+        widget.animationController.value = animationProgress;
+        moveCircleAlongPath(
+          animationProgress,
+          widget.currentRoute,
+          widget.circlePositionNotifier,
+          _totalDistance,
+          startIndex: widget.currentRoute.startIndex,
+          endIndex: widget.currentRoute.endIndex,
+        );
+      }
+
       LatLng currentPoint = widget.circlePositionNotifier.value;
+      await widget.updateFrame(animationProgress, currentPoint);
 
-      await widget.updateFrame(scaledProgress, currentPoint);
-
-      widget.saveDirectionNotifier.value = calculateDirection(lastPosition, currentPoint, defaultDirection: widget.saveDirectionNotifier.value);
+      widget.saveDirectionNotifier.value =
+          calculateDirection(lastPosition, currentPoint, defaultDirection: widget.saveDirectionNotifier.value);
       lastPosition = currentPoint;
 
       if (frame < zoomFrames) {
-        double t = frame / (zoomFrames - 1).toDouble();
-        widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(t.clamp(0.0, 1.0));
+        double tFrame = frame / (zoomFrames - 1).toDouble();
+        widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(tFrame.clamp(0.0, 1.0));
       } else if (frame < zoomFrames + followFrames) {
         widget.markerSizeNotifier.value = markerBaseSize;
       } else {
-        double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
-        widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(1 - t.clamp(0.0, 1.0));
+        double tFrame = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
+        widget.markerSizeNotifier.value = markerBaseSize * _easeOutBack(1 - tFrame.clamp(0.0, 1.0));
       }
 
       if (!routeFits) {
@@ -351,18 +406,18 @@ class _SaveButtonState extends State<SaveButton> {
         }
 
         if (frame < zoomFrames) {
-          double t = frame / (zoomFrames - 1).toDouble();
-          double zoomT = _easeInQuad(t.clamp(0.0, 1.0));
-          double panT = _easeOutQuad(t.clamp(0.0, 1.0));
+          double tFrame = frame / (zoomFrames - 1).toDouble();
+          double zoomT = _easeInQuad(tFrame.clamp(0.0, 1.0));
+          double panT = _easeOutQuad(tFrame.clamp(0.0, 1.0));
           double zoom = fitZoom + (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(fittedCenter!, startPoint, panT);
           widget.mapController.move(center, zoom);
         } else if (frame < zoomFrames + followFrames) {
           widget.mapController.move(currentPoint, initialZoom);
         } else {
-          double t = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
-          double zoomT = _easeOutQuad(t.clamp(0.0, 1.0));
-          double panT = t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2;
+          double tFrame = (frame - (zoomFrames + followFrames)) / (zoomFrames - 1).toDouble();
+          double zoomT = _easeOutQuad(tFrame.clamp(0.0, 1.0));
+          double panT = tFrame < 0.5 ? 2 * tFrame * tFrame : 1 - pow(-2 * tFrame + 2, 2) / 2;
           double zoom = initialZoom - (initialZoom - fitZoom) * zoomT;
           LatLng center = _interpolateCenter(endPoint, fittedCenter!, panT);
           widget.mapController.move(center, zoom);
