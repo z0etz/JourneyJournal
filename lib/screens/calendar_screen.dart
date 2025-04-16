@@ -7,7 +7,7 @@ class CalendarScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: const Center(
-        child: Text('This is the Calendar Screen'),
+        child: Text('This is the Calendar Screen', style: TextStyle(fontFamily: 'Princess Sofia'))
       ),
     );
   }

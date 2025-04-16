@@ -91,9 +91,11 @@ flutter:
   uses-material-design: true
 
   fonts:
-    - family: PrincessSofia
+    - family: Princess Sofia
       fonts:
-        - asset: assets/PrincessSofia-Regular.ttf
+        - asset: assets/fonts/PrincessSofia-Regular.ttf
+  assets:
+    - assets/fonts/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

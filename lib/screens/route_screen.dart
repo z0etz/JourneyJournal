@@ -33,7 +33,7 @@ class RouteScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Saved Routes',
-            style: TextStyle(fontFamily: 'PrincessSofia')),
+            style: TextStyle(fontFamily: 'Princess Sofia')),
       ),
       body: FutureBuilder(
         future: RouteModel.getRoutesBox(),
