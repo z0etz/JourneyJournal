@@ -79,6 +79,19 @@ void moveCircleAlongPath(
   circlePositionNotifier.value = path.last;
 }
 
+double calculateDirection(LatLng? lastPosition, LatLng currentPosition, {double defaultDirection = 0.0}) {
+  if (lastPosition == null) return defaultDirection;
+  double deltaLat = currentPosition.latitude - lastPosition.latitude;
+  double deltaLng = currentPosition.longitude - lastPosition.longitude;
+  double distanceMoved = Geolocator.distanceBetween(
+    lastPosition.latitude,
+    lastPosition.longitude,
+    currentPosition.latitude,
+    currentPosition.longitude,
+  );
+  return distanceMoved > 1.0 ? atan2(deltaLng, deltaLat) : defaultDirection;
+}
+
 class SaveButton extends StatefulWidget {
   final GlobalKey mapKey;
   final int frameCount;
@@ -90,12 +103,12 @@ class SaveButton extends StatefulWidget {
   final double initialZoom;
   final double fitZoom;
   final ValueNotifier<double> markerSizeNotifier;
-  final ValueNotifier<double> directionNotifier;
   final ValueNotifier<double> saveDirectionNotifier;
   final bool showWholeRoute;
   final VoidCallback? onSaveStart;
   final VoidCallback? onSaveComplete;
   final ValueNotifier<bool> isSavingNotifier;
+  final Future<void> Function(double progress, LatLng currentPoint) updateFrame;
 
   const SaveButton({
     required this.mapKey,
@@ -108,12 +121,12 @@ class SaveButton extends StatefulWidget {
     required this.initialZoom,
     required this.fitZoom,
     required this.markerSizeNotifier,
-    required this.directionNotifier,
     required this.saveDirectionNotifier,
     required this.showWholeRoute,
     required this.onSaveStart,
     required this.onSaveComplete,
     required this.isSavingNotifier,
+    required this.updateFrame,
     super.key,
   });
 
@@ -305,19 +318,9 @@ class _SaveButtonState extends State<SaveButton> {
       );
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
-      if (frame >= zoomFrames && frame < zoomFrames + followFrames && lastPosition != null) {
-        double deltaLat = currentPoint.latitude - lastPosition.latitude;
-        double deltaLng = currentPoint.longitude - lastPosition.longitude;
-        double distanceMoved = Geolocator.distanceBetween(
-          lastPosition.latitude,
-          lastPosition.longitude,
-          currentPoint.latitude,
-          currentPoint.longitude,
-        );
-        if (distanceMoved > 1.0) {
-          widget.saveDirectionNotifier.value = atan2(deltaLng, deltaLat);
-        }
-      }
+      await widget.updateFrame(progress, currentPoint);
+
+      widget.saveDirectionNotifier.value = calculateDirection(lastPosition, currentPoint, defaultDirection: widget.saveDirectionNotifier.value);
       lastPosition = currentPoint;
 
       if (frame < zoomFrames) {
