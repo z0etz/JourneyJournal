@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -7,7 +8,6 @@ import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
 import 'package:journeyjournal/utils/video_util.dart';
 import 'package:geolocator/geolocator.dart';
-import 'dart:io';
 import '../models/image_data.dart';
 
 class AnimationScreen extends StatefulWidget {
@@ -35,6 +35,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   bool _selectingStart = false;
   bool _selectingEnd = false;
   bool _isImageDisplayed = false;
+  double _imageDisplayProgress = 0.0;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -48,6 +49,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   final ValueNotifier<double> _markerSizeNotifier = ValueNotifier<double>(0.0);
   final ValueNotifier<double> _directionNotifier = ValueNotifier<double>(0.0);
   final ValueNotifier<double> _saveDirectionNotifier = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _currentImageOpacity = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _currentImageScale = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _nextImageOpacity = ValueNotifier<double>(0.0);
+  final ValueNotifier<double> _nextImageScale = ValueNotifier<double>(0.0);
 
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
@@ -176,7 +181,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         startIndex: currentRoute.startIndex,
         endIndex: currentRoute.endIndex,
       );
-      // Initialize image points
       _imagePoints = currentRoute.routePoints
           .asMap()
           .entries
@@ -186,7 +190,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
               (currentRoute.endIndex == -1 || entry.key <= currentRoute.endIndex)))
           .map((entry) => entry.value)
           .toList();
-      // Calculate durations
       int totalImages = _imagePoints.fold(0, (sum, point) => sum + point.images.length);
       _totalAnimationDuration = Duration(seconds: _animationDuration.inSeconds + 3 * totalImages);
       _animationController.duration = _animationDuration;
@@ -252,6 +255,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _isPaused = false;
       _isLastImageFading = false;
       _isImageDisplayed = false;
+      _imageDisplayProgress = 0.0;
+      _currentImageOpacity.value = 0.0;
+      _currentImageScale.value = 0.0;
+      _nextImageOpacity.value = 0.0;
+      _nextImageScale.value = 0.0;
       if (currentRoute.routePoints.isNotEmpty) {
         _circlePositionNotifier.value = currentRoute.routePoints[currentRoute.startIndex].point;
       }
@@ -312,7 +320,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
     int closestIndex = 0;
     double minDistance = double.infinity;
-    for ( int i = 0; i < currentRoute.routePoints.length; i++) {
+    for (int i = 0; i < currentRoute.routePoints.length; i++) {
       double distance = Geolocator.distanceBetween(
         tappedPoint.latitude,
         tappedPoint.longitude,
@@ -398,7 +406,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           calculateDirection(lastPosition, currentPosition, defaultDirection: _directionNotifier.value);
       lastPosition = currentPosition;
 
-      // Check for pause at image points
       if (_currentImagePointIndex < _imagePoints.length) {
         final imagePoint = _imagePoints[_currentImagePointIndex];
         final distance = Geolocator.distanceBetween(
@@ -422,6 +429,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _isPaused = false;
       _isLastImageFading = false;
       _isImageDisplayed = false;
+      _imageDisplayProgress = 0.0;
+      _currentImageOpacity.value = 0.0;
+      _currentImageScale.value = 0.0;
+      _nextImageOpacity.value = 0.0;
+      _nextImageScale.value = 0.0;
       _currentImageController.reset();
       _nextImageController.reset();
       if (currentRoute.endIndex > currentRoute.startIndex && currentRoute.endIndex < currentRoute.routePoints.length) {
@@ -448,6 +460,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _currentImageIndex = 0;
       _nextImageIndex = -1;
       _isLastImageFading = false;
+      _imageDisplayProgress = 0.0;
       _circlePositionNotifier.value = point.point;
     });
 
@@ -458,23 +471,35 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _currentImageIndex = i;
         _nextImageIndex = i + 1 < _currentImages.length ? i + 1 : -1;
         _isLastImageFading = i == _currentImages.length - 1;
+        _imageDisplayProgress = 0.0;
       });
 
       await _currentImageController.forward();
+      _currentImageOpacity.value = 1.0;
+      _currentImageScale.value = 1.0;
       await Future.delayed(const Duration(seconds: 2));
       if (_nextImageIndex >= 0) {
         _nextImageController.forward();
+        _nextImageOpacity.value = 1.0;
+        _nextImageScale.value = 1.0;
       }
       await _currentImageController.reverse();
+      _currentImageOpacity.value = 0.0;
+      _currentImageScale.value = 0.0;
 
       if (_nextImageIndex >= 0) {
         setState(() {
           _currentImageIndex = _nextImageIndex;
           _nextImageIndex = _nextImageIndex + 1 < _currentImages.length ? _nextImageIndex + 1 : -1;
           _isLastImageFading = _nextImageIndex == -1;
+          _imageDisplayProgress = 0.0;
         });
         _currentImageController.value = 1.0;
+        _currentImageOpacity.value = 1.0;
+        _currentImageScale.value = 1.0;
         _nextImageController.reset();
+        _nextImageOpacity.value = 0.0;
+        _nextImageScale.value = 0.0;
       }
     }
 
@@ -485,6 +510,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _currentImageIndex = 0;
       _nextImageIndex = -1;
       _isLastImageFading = false;
+      _imageDisplayProgress = 0.0;
+      _currentImageOpacity.value = 0.0;
+      _currentImageScale.value = 0.0;
+      _nextImageOpacity.value = 0.0;
+      _nextImageScale.value = 0.0;
       _currentImagePointIndex++;
     });
 
@@ -494,63 +524,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   Future<void> _updateFrameForSave(double progress, LatLng currentPoint) async {
-    if (_isPaused && !_isLastImageFading) return;
-
-    if (_currentImagePointIndex < _imagePoints.length) {
-      final imagePoint = _imagePoints[_currentImagePointIndex];
-      final distance = Geolocator.distanceBetween(
-        currentPoint.latitude,
-        currentPoint.longitude,
-        imagePoint.point.latitude,
-        imagePoint.point.longitude,
-      );
-      if (distance < 50 && !_isPaused) {
-        setState(() {
-          _isPaused = true;
-          _isImageDisplayed = true;
-          _currentImages = imagePoint.images;
-          _currentImageIndex = 0;
-          _nextImageIndex = -1;
-          _isLastImageFading = false;
-          _circlePositionNotifier.value = imagePoint.point;
-        });
-
-        for (int i = 0; i < _currentImages.length; i++) {
-          setState(() {
-            _currentImageIndex = i;
-            _nextImageIndex = i + 1 < _currentImages.length ? i + 1 : -1;
-            _isLastImageFading = i == _currentImages.length - 1;
-          });
-
-          await _currentImageController.forward();
-          await Future.delayed(const Duration(seconds: 2));
-          if (_nextImageIndex >= 0) {
-            _nextImageController.forward();
-          }
-          await _currentImageController.reverse();
-
-          if (_nextImageIndex >= 0) {
-            setState(() {
-              _currentImageIndex = _nextImageIndex;
-              _nextImageIndex = _nextImageIndex + 1 < _currentImages.length ? _nextImageIndex + 1 : -1;
-              _isLastImageFading = _nextImageIndex == -1;
-            });
-            _currentImageController.value = 1.0;
-            _nextImageController.reset();
-          }
-        }
-
-        setState(() {
-          _isPaused = false;
-          _isImageDisplayed = false;
-          _currentImages = [];
-          _currentImageIndex = 0;
-          _nextImageIndex = -1;
-          _isLastImageFading = false;
-          _currentImagePointIndex++;
-        });
-      }
-    }
+    _circlePositionNotifier.value = currentPoint;
   }
 
   List<Marker> _buildMarkers({bool isSaving = false}) {
@@ -617,67 +591,108 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       );
     }
 
-    // Add image marker
     if (_isImageDisplayed && _currentImages.isNotEmpty && _currentImageIndex < _currentImages.length) {
-      // Calculate bottom center of the map
-      LatLngBounds? bounds = _mapController.camera.visibleBounds;
-      if (bounds != null) {
-        double bottomLat = bounds.south;
-        double centerLng = (bounds.west + bounds.east) / 2;
-        markers.add(
-          Marker(
-            point: LatLng(bottomLat + 0.001, centerLng),
-            width: 100.0,
-            height: 100.0,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AnimatedBuilder(
-                  animation: _currentImageController,
-                  builder: (context, _) {
-                    return Opacity(
-                      opacity: _currentOpacityAnimation.value,
-                      child: Transform.scale(
-                        scale: _currentScaleAnimation.value,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(_currentImages[_currentImageIndex].path),
-                            width: 100,
-                            height: 100,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                if (_nextImageIndex >= 0 && _nextImageIndex < _currentImages.length)
-                  AnimatedBuilder(
-                    animation: _nextImageController,
-                    builder: (context, _) {
+      final renderObject = repaintBoundaryKey.currentContext?.findRenderObject();
+      double widgetWidth = 576.0;
+      double widgetHeight = 1024.0;
+      if (renderObject is RenderBox) {
+        widgetWidth = renderObject.size.width;
+        widgetHeight = renderObject.size.height;
+      }
+      final imageSize = min(widgetWidth, widgetHeight) - 40;
+
+      double currentOpacity = 0.0;
+      double currentScale = 0.0;
+      double nextOpacity = 0.0;
+      double nextScale = 0.0;
+
+      if (_imageDisplayProgress <= 1.0) {
+        currentOpacity = _imageDisplayProgress;
+        currentScale = _imageDisplayProgress;
+      } else if (_imageDisplayProgress <= 3.0) {
+        currentOpacity = 1.0;
+        currentScale = 1.0;
+      } else if (_imageDisplayProgress <= 4.0) {
+        currentOpacity = 1.0 - (_imageDisplayProgress - 3.0);
+        currentScale = 1.0 - (_imageDisplayProgress - 3.0);
+      }
+
+      if (_nextImageIndex >= 0 && _imageDisplayProgress >= 3.0 && _imageDisplayProgress <= 4.0) {
+        nextOpacity = _imageDisplayProgress - 3.0;
+        nextScale = _imageDisplayProgress - 3.0;
+      } else if (_nextImageIndex >= 0 && _imageDisplayProgress > 4.0) {
+        nextOpacity = 1.0;
+        nextScale = 1.0;
+      }
+
+      _currentImageOpacity.value = currentOpacity;
+      _currentImageScale.value = currentScale;
+      _nextImageOpacity.value = nextOpacity;
+      _nextImageScale.value = nextScale;
+
+      markers.add(
+        Marker(
+          point: _mapController.camera.center,
+          width: imageSize,
+          height: imageSize,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              ValueListenableBuilder<double>(
+                valueListenable: _currentImageOpacity,
+                builder: (context, opacity, child) {
+                  return ValueListenableBuilder<double>(
+                    valueListenable: _currentImageScale,
+                    builder: (context, scale, child) {
                       return Opacity(
-                        opacity: _nextOpacityAnimation.value,
+                        opacity: opacity,
                         child: Transform.scale(
-                          scale: _nextScaleAnimation.value,
+                          scale: scale,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.file(
-                              File(_currentImages[_nextImageIndex].path),
-                              width: 100,
-                              height: 100,
+                              File(_currentImages[_currentImageIndex].path),
+                              width: imageSize,
+                              height: imageSize,
                               fit: BoxFit.cover,
                             ),
                           ),
                         ),
                       );
                     },
-                  ),
-              ],
-            ),
+                  );
+                },
+              ),
+              if (_nextImageIndex >= 0 && _nextImageIndex < _currentImages.length)
+                ValueListenableBuilder<double>(
+                  valueListenable: _nextImageOpacity,
+                  builder: (context, opacity, child) {
+                    return ValueListenableBuilder<double>(
+                      valueListenable: _nextImageScale,
+                      builder: (context, scale, child) {
+                        return Opacity(
+                          opacity: opacity,
+                          child: Transform.scale(
+                            scale: scale,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(_currentImages[_nextImageIndex].path),
+                                width: imageSize,
+                                height: imageSize,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+            ],
           ),
-        );
-      }
+        ),
+      );
     }
 
     return markers;
@@ -716,6 +731,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _markerSizeNotifier.dispose();
     _directionNotifier.dispose();
     _saveDirectionNotifier.dispose();
+    _currentImageOpacity.dispose();
+    _currentImageScale.dispose();
+    _nextImageOpacity.dispose();
+    _nextImageScale.dispose();
     _animationController.dispose();
     _currentImageController.dispose();
     _nextImageController.dispose();
@@ -1047,6 +1066,16 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   isSavingNotifier: _isSavingNotifier,
                                   updateFrame: _updateFrameForSave,
                                   totalDuration: _totalAnimationDuration,
+                                  imagePoints: _imagePoints,
+                                  isImageDisplayed: (value) => _isImageDisplayed = value,
+                                  setCurrentImages: (images) => _currentImages = images,
+                                  setCurrentImageIndex: (index) => _currentImageIndex = index,
+                                  setNextImageIndex: (index) => _nextImageIndex = index,
+                                  setImageDisplayProgress: (progress) => _imageDisplayProgress = progress,
+                                  currentImageOpacity: _currentImageOpacity,
+                                  currentImageScale: _currentImageScale,
+                                  nextImageOpacity: _nextImageOpacity,
+                                  nextImageScale: _nextImageScale,
                                 ),
                               ),
                             ],
