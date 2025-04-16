@@ -6,14 +6,37 @@ import 'package:hive_flutter/hive_flutter.dart';
 class RouteScreen extends StatelessWidget {
   const RouteScreen({super.key});
 
+  Future<bool> showDeleteRouteConfirmationDialog(BuildContext context, String routeName) {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirm Deletion'),
+          content: Text('Are you sure you want to delete the route "$routeName" and all its associated data?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    ).then((value) => value ?? false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Saved Routes'),
+        title: const Text('Saved Routes',
+            style: TextStyle(fontFamily: 'Princess Sofia')),
       ),
       body: FutureBuilder(
-        future: RouteModel.getRoutesBox(), // Load the box from Hive
+        future: RouteModel.getRoutesBox(),
         builder: (context, AsyncSnapshot<Box<RouteModel>> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -22,12 +45,12 @@ class RouteScreen extends StatelessWidget {
             return const Center(child: Text('Error loading routes'));
           }
 
-          final box = snapshot.data!; // Access the box
+          final box = snapshot.data!;
 
           return ValueListenableBuilder(
             valueListenable: box.listenable(),
             builder: (context, Box<RouteModel> box, _) {
-              final savedRoutes = box.values.toList(); // Get updated routes
+              final savedRoutes = box.values.toList();
               return ListView.builder(
                 itemCount: savedRoutes.length,
                 itemBuilder: (context, index) {
@@ -36,10 +59,12 @@ class RouteScreen extends StatelessWidget {
                     title: Text(route.name),
                     subtitle: Text('Points: ${route.routePoints.length}'),
                     trailing: IconButton(
-                      icon: const Icon(Icons.close), // Delete icon
+                      icon: const Icon(Icons.close),
                       onPressed: () async {
-                        // Delete the route from Hive
-                        await box.delete(route.id);
+                        bool confirm = await showDeleteRouteConfirmationDialog(context, route.name);
+                        if (confirm) {
+                          await box.delete(route.id);
+                        }
                       },
                     ),
                     onTap: () {
@@ -48,7 +73,7 @@ class RouteScreen extends StatelessWidget {
                         MaterialPageRoute(
                           builder: (context) => MainScreen(initialRoute: route),
                         ),
-                            (route) => false, // This removes all previous routes
+                            (route) => false,
                       );
                     },
                   );
