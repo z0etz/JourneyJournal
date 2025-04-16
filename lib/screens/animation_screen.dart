@@ -51,17 +51,24 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
   Duration _animationDuration = const Duration(seconds: 5);
+  Duration _totalAnimationDuration = const Duration(seconds: 5);
   double _totalDistance = 0.0;
   static const double markerBaseSize = 25.0;
 
   // Image animation
-  late AnimationController _imageController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
+  late AnimationController _currentImageController;
+  late AnimationController _nextImageController;
+  late Animation<double> _currentScaleAnimation;
+  late Animation<double> _currentOpacityAnimation;
+  late Animation<double> _nextScaleAnimation;
+  late Animation<double> _nextOpacityAnimation;
   List<RoutePoint> _imagePoints = [];
   int _currentImagePointIndex = 0;
   List<ImageData> _currentImages = [];
+  int _currentImageIndex = 0;
+  int _nextImageIndex = -1;
   bool _isPaused = false;
+  bool _isLastImageFading = false;
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -123,15 +130,25 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     );
 
     // Image animation setup
-    _imageController = AnimationController(
+    _currentImageController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
-    _scaleAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _imageController, curve: Curves.easeInOut),
+    _nextImageController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
     );
-    _opacityAnimation = Tween<double>(begin: 1, end: 0).animate(
-      CurvedAnimation(parent: _imageController, curve: Curves.easeOut),
+    _currentScaleAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _currentImageController, curve: Curves.easeInOut),
+    );
+    _currentOpacityAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _currentImageController, curve: Curves.easeInOut),
+    );
+    _nextScaleAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _nextImageController, curve: Curves.easeInOut),
+    );
+    _nextOpacityAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _nextImageController, curve: Curves.easeInOut),
     );
 
     _loadRoute();
@@ -168,8 +185,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
               (currentRoute.endIndex == -1 || entry.key <= currentRoute.endIndex)))
           .map((entry) => entry.value)
           .toList();
-      // Adjust duration based on image points
-      _animationDuration = Duration(seconds: _imagePoints.isEmpty ? 5 : 5 + 3 * _imagePoints.length);
+      // Calculate durations
+      int totalImages = _imagePoints.fold(0, (sum, point) => sum + point.images.length);
+      _totalAnimationDuration = Duration(seconds: _animationDuration.inSeconds + 3 * totalImages);
       _animationController.duration = _animationDuration;
     }
 
@@ -224,10 +242,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _isSavingNotifier.value = false;
       _animationController.stop();
       _animationController.reset();
-      _imageController.reset();
+      _currentImageController.reset();
+      _nextImageController.reset();
       _currentImagePointIndex = 0;
+      _currentImageIndex = 0;
+      _nextImageIndex = -1;
       _currentImages = [];
       _isPaused = false;
+      _isLastImageFading = false;
       if (currentRoute.routePoints.isNotEmpty) {
         _circlePositionNotifier.value = currentRoute.routePoints[currentRoute.startIndex].point;
       }
@@ -359,7 +381,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _markerSizeNotifier.value = markerBaseSize;
     LatLng? lastPosition;
     _progressAnimation.addListener(() {
-      if (_isPaused) return;
+      if (_isPaused && !_isLastImageFading) return;
 
       double scaledProgress = _progressAnimation.value * scaleFactor;
       moveCircleAlongPath(
@@ -393,9 +415,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _animationController.forward().then((_) {
       _markerSizeNotifier.value = 0.0;
       _currentImages = [];
-      _currentImagePointIndex = 0;
+      _currentImageIndex = 0;
+      _nextImageIndex = -1;
       _isPaused = false;
-      _imageController.reset();
+      _isLastImageFading = false;
+      _currentImageController.reset();
+      _nextImageController.reset();
       if (currentRoute.endIndex > currentRoute.startIndex && currentRoute.endIndex < currentRoute.routePoints.length) {
         LatLng secondLast = currentRoute.routePoints[currentRoute.endIndex - 1].point;
         LatLng last = currentRoute.routePoints[currentRoute.endIndex].point;
@@ -416,19 +441,45 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     setState(() {
       _isPaused = true;
       _currentImages = point.images;
+      _currentImageIndex = 0;
+      _nextImageIndex = -1;
+      _isLastImageFading = false;
+      _circlePositionNotifier.value = point.point;
     });
 
     _animationController.stop();
-    _imageController.forward();
 
-    // Pause for 3 seconds per image
-    await Future.delayed(Duration(seconds: 3 * _currentImages.length));
+    for (int i = 0; i < _currentImages.length; i++) {
+      setState(() {
+        _currentImageIndex = i;
+        _nextImageIndex = i + 1 < _currentImages.length ? i + 1 : -1;
+        _isLastImageFading = i == _currentImages.length - 1;
+      });
 
-    await _imageController.reverse();
+      await _currentImageController.forward();
+      await Future.delayed(const Duration(seconds: 2));
+      if (_nextImageIndex >= 0) {
+        _nextImageController.forward();
+      }
+      await _currentImageController.reverse();
+
+      if (_nextImageIndex >= 0) {
+        setState(() {
+          _currentImageIndex = _nextImageIndex;
+          _nextImageIndex = _nextImageIndex + 1 < _currentImages.length ? _nextImageIndex + 1 : -1;
+          _isLastImageFading = _nextImageIndex == -1;
+        });
+        _currentImageController.value = 1.0;
+        _nextImageController.reset();
+      }
+    }
 
     setState(() {
       _isPaused = false;
       _currentImages = [];
+      _currentImageIndex = 0;
+      _nextImageIndex = -1;
+      _isLastImageFading = false;
       _currentImagePointIndex++;
     });
 
@@ -438,9 +489,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   Future<void> _updateFrameForSave(double progress, LatLng currentPoint) async {
-    if (_isPaused) return;
+    if (_isPaused && !_isLastImageFading) return;
 
-    // Check for pause at image points
     if (_currentImagePointIndex < _imagePoints.length) {
       final imagePoint = _imagePoints[_currentImagePointIndex];
       final distance = Geolocator.distanceBetween(
@@ -501,6 +551,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       child: Text(
                         routePoint.title,
                         style: const TextStyle(
+                          fontFamily: 'Princess Sofia',
                           fontWeight: FontWeight.bold,
                           fontSize: 10,
                           color: Colors.black,
@@ -551,7 +602,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _directionNotifier.dispose();
     _saveDirectionNotifier.dispose();
     _animationController.dispose();
-    _imageController.dispose();
+    _currentImageController.dispose();
+    _nextImageController.dispose();
     _mapController.dispose();
     super.dispose();
   }
@@ -731,40 +783,56 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 ),
               ),
             ),
-            if (_currentImages.isNotEmpty)
+            if (_currentImages.isNotEmpty && _currentImageIndex < _currentImages.length)
               Positioned(
                 bottom: 20,
                 left: 20,
                 right: 20,
-                child: AnimatedBuilder(
-                  animation: _imageController,
-                  builder: (context, _) {
-                    return Opacity(
-                      opacity: _opacityAnimation.value,
-                      child: Transform.scale(
-                        scale: _scaleAnimation.value,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: _currentImages.map((image) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(
-                                    File(image.path),
-                                    width: 100,
-                                    height: 100,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _currentImageController,
+                      builder: (context, _) {
+                        return Opacity(
+                          opacity: _currentOpacityAnimation.value,
+                          child: Transform.scale(
+                            scale: _currentScaleAnimation.value,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(_currentImages[_currentImageIndex].path),
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                           ),
-                        ),
+                        );
+                      },
+                    ),
+                    if (_nextImageIndex >= 0 && _nextImageIndex < _currentImages.length)
+                      AnimatedBuilder(
+                        animation: _nextImageController,
+                        builder: (context, _) {
+                          return Opacity(
+                            opacity: _nextOpacityAnimation.value,
+                            child: Transform.scale(
+                              scale: _nextScaleAnimation.value,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  File(_currentImages[_nextImageIndex].path),
+                                  width: 100,
+                                  height: 100,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
+                  ],
                 ),
               ),
             if (_isControlsExpanded)
@@ -773,8 +841,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 left: 10.0,
                 right: 10.0,
                 child: Material(
-                  color:
-                  (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
+                  color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
                   child: Stack(
                     children: [
                       Container(
@@ -814,17 +881,21 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               const SizedBox(height: 10),
                               const Text("Animation Duration"),
                               Slider(
-                                value: _animationController.duration!.inSeconds.toDouble(),
+                                value: _animationDuration.inSeconds.toDouble(),
                                 min: 5,
                                 max: 60,
-                                divisions:  55,
-                                label: "${_animationController.duration!.inSeconds}s",
+                                divisions: 55,
+                                label: "${_animationDuration.inSeconds}s",
                                 onChanged: _isSavingNotifier.value
                                     ? null
                                     : (value) {
                                   setState(() {
                                     _animationDuration = Duration(seconds: value.toInt());
                                     _animationController.duration = _animationDuration;
+                                    int totalImages = _imagePoints.fold(
+                                        0, (sum, point) => sum + point.images.length);
+                                    _totalAnimationDuration =
+                                        Duration(seconds: value.toInt() + 3 * totalImages);
                                   });
                                 },
                               ),
@@ -911,6 +982,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   },
                                   isSavingNotifier: _isSavingNotifier,
                                   updateFrame: _updateFrameForSave,
+                                  totalDuration: _totalAnimationDuration,
                                 ),
                               ),
                             ],

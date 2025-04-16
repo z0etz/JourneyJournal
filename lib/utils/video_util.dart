@@ -109,6 +109,7 @@ class SaveButton extends StatefulWidget {
   final VoidCallback? onSaveComplete;
   final ValueNotifier<bool> isSavingNotifier;
   final Future<void> Function(double progress, LatLng currentPoint) updateFrame;
+  final Duration totalDuration;
 
   const SaveButton({
     required this.mapKey,
@@ -127,6 +128,7 @@ class SaveButton extends StatefulWidget {
     required this.onSaveComplete,
     required this.isSavingNotifier,
     required this.updateFrame,
+    required this.totalDuration,
     super.key,
   });
 
@@ -249,7 +251,7 @@ class _SaveButtonState extends State<SaveButton> {
       );
     }
 
-    int totalFrames = (widget.animationController.duration!.inSeconds * 30).round();
+    int totalFrames = (widget.totalDuration.inSeconds * 30).round();
     List<String> framePaths = [];
     final bool routeFits = widget.initialZoom <= widget.fitZoom;
     const int zoomFrames = 30;
@@ -307,9 +309,12 @@ class _SaveButtonState extends State<SaveButton> {
         widget.saveDirectionNotifier.value = finalDirection;
       }
 
-      widget.animationController.value = progress;
+      // Scale progress to account for total duration
+      double scaledProgress = progress * (widget.animationController.duration!.inMilliseconds / widget.totalDuration.inMilliseconds);
+
+      widget.animationController.value = scaledProgress;
       moveCircleAlongPath(
-        progress,
+        scaledProgress,
         widget.currentRoute,
         widget.circlePositionNotifier,
         _totalDistance,
@@ -318,7 +323,7 @@ class _SaveButtonState extends State<SaveButton> {
       );
       LatLng currentPoint = widget.circlePositionNotifier.value;
 
-      await widget.updateFrame(progress, currentPoint);
+      await widget.updateFrame(scaledProgress, currentPoint);
 
       widget.saveDirectionNotifier.value = calculateDirection(lastPosition, currentPoint, defaultDirection: widget.saveDirectionNotifier.value);
       lastPosition = currentPoint;
@@ -364,7 +369,7 @@ class _SaveButtonState extends State<SaveButton> {
         }
       }
 
-      await Future.delayed(const Duration(milliseconds: 33));
+      await Future.delayed(Duration(milliseconds: (1000 ~/ 30)));
       String framePath = await _captureFrame(frame);
       if (framePath.isNotEmpty) framePaths.add(framePath);
     }
