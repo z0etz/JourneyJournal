@@ -28,11 +28,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   bool _isControlsExpanded = false;
   bool _showRouteTitles = false;
   bool _showWholeRoute = true;
+  bool _showImages = false; // New: Toggle state
   String _selectedAspectRatio = "9:16";
   bool _selectingStart = false;
   bool _selectingEnd = false;
   double _imageLength = 3.0;
-  double _totalVideoLength = 0.0; // New: Store total video length
+  double _totalVideoLength = 0.0;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -64,12 +65,10 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _loadRoute();
   }
 
-  // New: Calculate total video length (animation + images)
   double _calculateTotalVideoLength() {
     double animationDuration = _animationController.duration!.inSeconds.toDouble();
     int imageCount = currentRoute.routePoints
         .fold(0, (sum, point) => sum + (point.images.isNotEmpty ? point.images.length : 0));
-    // Future-proof: Can add tag filtering here, e.g., point.images.where((img) => img.tags.contains('include')).length
     return animationDuration + (imageCount * _imageLength);
   }
 
@@ -119,7 +118,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           }
         }
       }
-      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -147,7 +146,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     }
 
     setState(() {
-      _totalVideoLength = _calculateTotalVideoLength(); // Initialize total length
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -166,7 +165,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           fitZoom = _mapController.camera.zoom;
           zoomLevel = _mapController.camera.zoom;
           mapPosition = _mapController.camera.center;
-          _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+          _totalVideoLength = _calculateTotalVideoLength();
         });
         if (currentRoute.routePoints.isNotEmpty) {
           _setInitialCirclePosition();
@@ -216,14 +215,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _isAnimating = false;
         _selectingStart = false;
         _selectingEnd = false;
-        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+        _totalVideoLength = _calculateTotalVideoLength();
       });
     } else if (currentRoute.routePoints.isNotEmpty) {
       setState(() {
         _isAnimating = true;
         _selectingStart = false;
         _selectingEnd = false;
-        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+        _totalVideoLength = _calculateTotalVideoLength();
       });
       _animateMarker();
     }
@@ -237,7 +236,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _selectingStart = true;
         _selectingEnd = false;
       }
-      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -249,7 +248,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _selectingEnd = true;
         _selectingStart = false;
       }
-      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -303,7 +302,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           }
         }
       }
-      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -311,7 +310,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     if (!_isAnimating || currentRoute.routePoints.length < 2 || currentRoute.startIndex < 0 || currentRoute.endIndex <= currentRoute.startIndex || currentRoute.endIndex >= currentRoute.routePoints.length) {
       setState(() {
         _isAnimating = false;
-        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+        _totalVideoLength = _calculateTotalVideoLength();
       });
       return;
     }
@@ -364,7 +363,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       }
       setState(() {
         _isAnimating = false;
-        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+        _totalVideoLength = _calculateTotalVideoLength();
       });
     });
   }
@@ -696,66 +695,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     : (value) {
                                   setState(() {
                                     _animationController.duration = Duration(seconds: value.toInt());
-                                    _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+                                    _totalVideoLength = _calculateTotalVideoLength();
                                   });
                                 },
                               ),
                               const SizedBox(height: 10),
-                              const Text("Image Display Duration"),
-                              Slider(
-                                value: _imageLength,
-                                min: 2.0,
-                                max: 10.0,
-                                divisions: 16, // (10-2)/0.5 = 16
-                                label: "${_imageLength.toStringAsFixed(1)}s",
-                                onChanged: _isSavingNotifier.value
-                                    ? null
-                                    : (value) {
-                                  setState(() {
-                                    _imageLength = value;
-                                    _totalVideoLength = _calculateTotalVideoLength(); // Update total length
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 10),
-                              Text('Total Video Length: ${_totalVideoLength.toStringAsFixed(1)}s'), // New: Display total length
+                              Text('Total Video Length: ${_totalVideoLength.toStringAsFixed(1)}s'),
                               const SizedBox(height: 10),
                               Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text("Show routepoint titles"),
-                                  Switch(
-                                    value: _showRouteTitles,
-                                    onChanged: _isSavingNotifier.value
-                                        ? null
-                                        : (value) {
-                                      setState(() {
-                                        _showRouteTitles = value;
-                                        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text("Zoom to whole route"),
-                                  Switch(
-                                    value: _showWholeRoute,
-                                    onChanged: _isSavingNotifier.value
-                                        ? null
-                                        : (value) {
-                                      setState(() {
-                                        _showWholeRoute = value;
-                                        _fitMapToRoute();
-                                        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
                               const SizedBox(height: 10),
                               const Text("Aspect Ratio"),
                               DropdownButton<String>(
@@ -773,10 +720,80 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     _selectingStart = false;
                                     _selectingEnd = false;
                                     _selectedAspectRatio = value!;
-                                    _totalVideoLength = _calculateTotalVideoLength(); // Update total length
+                                    _totalVideoLength = _calculateTotalVideoLength();
                                   });
                                   WidgetsBinding.instance.addPostFrameCallback((_) {
                                     _fitMapToRoute();
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text("Show routepoint titles"),
+                                  Switch(
+                                    value: _showRouteTitles,
+                                    onChanged: _isSavingNotifier.value
+                                        ? null
+                                        : (value) {
+                                      setState(() {
+                                        _showRouteTitles = value;
+                                        _totalVideoLength = _calculateTotalVideoLength();
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text("Zoom to whole route"),
+                                  Switch(
+                                    value: _showWholeRoute,
+                                    onChanged: _isSavingNotifier.value
+                                        ? null
+                                        : (value) {
+                                      setState(() {
+                                        _showWholeRoute = value;
+                                        _fitMapToRoute();
+                                        _totalVideoLength = _calculateTotalVideoLength();
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text("Show Images"),
+                                  Switch(
+                                    value: _showImages,
+                                    onChanged: _isSavingNotifier.value
+                                        ? null
+                                        : (value) {
+                                      setState(() {
+                                        _showImages = value;
+                                        _totalVideoLength = _calculateTotalVideoLength();
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              const Text("Image Display Duration"),
+                              Slider(
+                                value: _imageLength,
+                                min: 2.0,
+                                max: 10.0,
+                                divisions: 16,
+                                label: "${_imageLength.toStringAsFixed(1)}s",
+                                onChanged: _isSavingNotifier.value
+                                    ? null
+                                    : (value) {
+                                  setState(() {
+                                    _imageLength = value;
+                                    _totalVideoLength = _calculateTotalVideoLength();
                                   });
                                 },
                               ),
