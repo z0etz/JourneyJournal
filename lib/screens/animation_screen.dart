@@ -149,6 +149,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       }
     }
 
+    _animationController.duration = Duration(seconds: currentRoute.animationDurationSeconds ?? 5);
+    print('Loaded animationDurationSeconds: ${currentRoute.animationDurationSeconds}');
+
     // Initialize tag states
     _tagStates = {};
     for (var point in currentRoute.routePoints) {
@@ -524,11 +527,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.black, width: 2),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black26,
                         blurRadius: 6,
-                        offset: Offset(0, 4),
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
@@ -731,6 +734,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                             setState(() {
                                               _animationController.duration = Duration(seconds: value.toInt());
                                               _totalVideoLength = _calculateTotalVideoLength();
+                                              currentRoute.animationDurationSeconds = value.toInt();
+                                              print('Saving animationDurationSeconds: ${value.toInt()}');
+                                              currentRoute.save();
                                             });
                                           },
                                         ),
@@ -912,7 +918,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   BoxShadow(
                                     color: Colors.black12,
                                     blurRadius: 4.0,
-                                    offset: Offset(0, 2),
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
