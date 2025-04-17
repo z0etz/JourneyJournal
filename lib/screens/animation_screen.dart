@@ -62,11 +62,13 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       vsync: this,
       duration: _animationDuration,
     );
+    _totalVideoLength = _calculateTotalVideoLength();
     _loadRoute();
   }
 
   double _calculateTotalVideoLength() {
     double animationDuration = _animationController.duration!.inSeconds.toDouble();
+    if (!_showImages) return animationDuration;
     int imageCount = currentRoute.routePoints
         .fold(0, (sum, point) => sum + (point.images.isNotEmpty ? point.images.length : 0));
     return animationDuration + (imageCount * _imageLength);
@@ -650,190 +652,208 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 right: 10.0,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 2 / 3,
+                    maxHeight: MediaQuery.of(context).size.height * 0.5,
                   ),
                   child: Material(
                     color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
                     child: Stack(
                       children: [
-                        SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).appBarTheme.backgroundColor,
-                              borderRadius: BorderRadius.circular(10.0),
-                            ),
-                            child: AbsorbPointer(
-                              absorbing: _isSavingNotifier.value,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      ElevatedButton(
-                                        onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingStartPoint,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: _selectingStart ? Colors.green[100] : null,
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Expanded(
+                              child: SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).appBarTheme.backgroundColor,
+                                    borderRadius: BorderRadius.circular(10.0),
+                                  ),
+                                  child: AbsorbPointer(
+                                    absorbing: _isSavingNotifier.value,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            ElevatedButton(
+                                              onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingStartPoint,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: _selectingStart ? Colors.green[100] : null,
+                                              ),
+                                              child: const Text("Set Start Point"),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingEndPoint,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: _selectingEnd ? Colors.red[100] : null,
+                                              ),
+                                              child: const Text("Set End Point"),
+                                            ),
+                                          ],
                                         ),
-                                        child: const Text("Set Start Point"),
-                                      ),
-                                      ElevatedButton(
-                                        onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingEndPoint,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: _selectingEnd ? Colors.red[100] : null,
+                                        const SizedBox(height: 10),
+                                        const Text("Animation Duration"),
+                                        Slider(
+                                          value: _animationController.duration!.inSeconds.toDouble(),
+                                          min: 5,
+                                          max: 60,
+                                          divisions: 56,
+                                          label: "${_animationController.duration!.inSeconds}s",
+                                          onChanged: _isSavingNotifier.value
+                                              ? null
+                                              : (value) {
+                                            setState(() {
+                                              _animationController.duration = Duration(seconds: value.toInt());
+                                              _totalVideoLength = _calculateTotalVideoLength();
+                                            });
+                                          },
                                         ),
-                                        child: const Text("Set End Point"),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  const Text("Animation Duration"),
-                                  Slider(
-                                    value: _animationController.duration!.inSeconds.toDouble(),
-                                    min: 5,
-                                    max: 60,
-                                    divisions: 56,
-                                    label: "${_animationController.duration!.inSeconds}s",
-                                    onChanged: _isSavingNotifier.value
-                                        ? null
-                                        : (value) {
-                                      setState(() {
-                                        _animationController.duration = Duration(seconds: value.toInt());
-                                        _totalVideoLength = _calculateTotalVideoLength();
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text('Total Video Length: ${_totalVideoLength.toStringAsFixed(1)}s'),
-                                  const SizedBox(height: 10),
-                                  Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
-                                  const SizedBox(height: 10),
-                                  const Text("Aspect Ratio"),
-                                  DropdownButton<String>(
-                                    value: _selectedAspectRatio,
-                                    items: ["9:16", "16:9", "3:2", "2:3", "1:1"].map((ratio) {
-                                      return DropdownMenuItem<String>(
-                                        value: ratio,
-                                        child: Text(ratio),
-                                      );
-                                    }).toList(),
-                                    onChanged: _isSavingNotifier.value
-                                        ? null
-                                        : (value) {
-                                      setState(() {
-                                        _selectingStart = false;
-                                        _selectingEnd = false;
-                                        _selectedAspectRatio = value!;
-                                        _totalVideoLength = _calculateTotalVideoLength();
-                                      });
-                                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                                        _fitMapToRoute();
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text("Show routepoint titles"),
-                                      Switch(
-                                        value: _showRouteTitles,
-                                        onChanged: _isSavingNotifier.value
-                                            ? null
-                                            : (value) {
-                                          setState(() {
-                                            _showRouteTitles = value;
-                                            _totalVideoLength = _calculateTotalVideoLength();
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text("Zoom to whole route"),
-                                      Switch(
-                                        value: _showWholeRoute,
-                                        onChanged: _isSavingNotifier.value
-                                            ? null
-                                            : (value) {
-                                          setState(() {
-                                            _showWholeRoute = value;
-                                            _fitMapToRoute();
-                                            _totalVideoLength = _calculateTotalVideoLength();
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      const Text("Show Images"),
-                                      Switch(
-                                        value: _showImages,
-                                        onChanged: _isSavingNotifier.value
-                                            ? null
-                                            : (value) {
-                                          setState(() {
-                                            _showImages = value;
-                                            _totalVideoLength = _calculateTotalVideoLength();
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-                                  const Text("Image Display Duration"),
-                                  Slider(
-                                    value: _imageLength,
-                                    min: 2.0,
-                                    max: 10.0,
-                                    divisions: 16,
-                                    label: "${_imageLength.toStringAsFixed(1)}s",
-                                    onChanged: _isSavingNotifier.value
-                                        ? null
-                                        : (value) {
-                                      setState(() {
-                                        _imageLength = value;
-                                        _totalVideoLength = _calculateTotalVideoLength();
-                                      });
-                                    },
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Center(
-                                    child: SaveButton(
-                                      mapKey: repaintBoundaryKey,
-                                      frameCount: frameCount,
-                                      animationController: _animationController,
-                                      circlePositionNotifier: _circlePositionNotifier,
-                                      aspectRatio: _selectedAspectRatio,
-                                      mapController: _mapController,
-                                      currentRoute: currentRoute,
-                                      initialZoom: zoomLevel,
-                                      fitZoom: fitZoom,
-                                      markerSizeNotifier: _markerSizeNotifier,
-                                      directionNotifier: _directionNotifier,
-                                      saveDirectionNotifier: _saveDirectionNotifier,
-                                      showWholeRoute: _showWholeRoute,
-                                      onSaveStart: () {
-                                        _isSavingNotifier.value = true;
-                                        widget.onSavingChanged?.call(true);
-                                      },
-                                      onSaveComplete: () {
-                                        _isSavingNotifier.value = false;
-                                        widget.onSavingChanged?.call(false);
-                                      },
-                                      isSavingNotifier: _isSavingNotifier,
+                                        const SizedBox(height: 10),
+                                        Text('Total Video Length: ${_totalVideoLength.toStringAsFixed(1)}s'),
+                                        const SizedBox(height: 10),
+                                        Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
+                                        const SizedBox(height: 10),
+                                        const Text("Aspect Ratio"),
+                                        DropdownButton<String>(
+                                          value: _selectedAspectRatio,
+                                          items: ["9:16", "16:9", "3:2", "2:3", "1:1"].map((ratio) {
+                                            return DropdownMenuItem<String>(
+                                              value: ratio,
+                                              child: Text(ratio),
+                                            );
+                                          }).toList(),
+                                          onChanged: _isSavingNotifier.value
+                                              ? null
+                                              : (value) {
+                                            setState(() {
+                                              _selectingStart = false;
+                                              _selectingEnd = false;
+                                              _selectedAspectRatio = value!;
+                                              _totalVideoLength = _calculateTotalVideoLength();
+                                            });
+                                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                                              _fitMapToRoute();
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("Show routepoint titles"),
+                                            Switch(
+                                              value: _showRouteTitles,
+                                              onChanged: _isSavingNotifier.value
+                                                  ? null
+                                                  : (value) {
+                                                setState(() {
+                                                  _showRouteTitles = value;
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("Zoom to whole route"),
+                                            Switch(
+                                              value: _showWholeRoute,
+                                              onChanged: _isSavingNotifier.value
+                                                  ? null
+                                                  : (value) {
+                                                setState(() {
+                                                  _showWholeRoute = value;
+                                                  _fitMapToRoute();
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("Show Images"),
+                                            Switch(
+                                              value: _showImages,
+                                              onChanged: _isSavingNotifier.value
+                                                  ? null
+                                                  : (value) {
+                                                setState(() {
+                                                  _showImages = value;
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+                                        const Text("Image Display Duration"),
+                                        Slider(
+                                          value: _imageLength,
+                                          min: 2.0,
+                                          max: 10.0,
+                                          divisions: 16,
+                                          label: "${_imageLength.toStringAsFixed(1)}s",
+                                          onChanged: _isSavingNotifier.value
+                                              ? null
+                                              : (value) {
+                                            setState(() {
+                                              _imageLength = value;
+                                              _totalVideoLength = _calculateTotalVideoLength();
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 10),
+                                      ],
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
                             ),
-                          ),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 10.0),
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.only(
+                                  bottomLeft: Radius.circular(10.0),
+                                  bottomRight: Radius.circular(10.0),
+                                ),
+                              ),
+                              child: Center(
+                                child: SaveButton(
+                                  mapKey: repaintBoundaryKey,
+                                  frameCount: frameCount,
+                                  animationController: _animationController,
+                                  circlePositionNotifier: _circlePositionNotifier,
+                                  aspectRatio: _selectedAspectRatio,
+                                  mapController: _mapController,
+                                  currentRoute: currentRoute,
+                                  initialZoom: zoomLevel,
+                                  fitZoom: fitZoom,
+                                  markerSizeNotifier: _markerSizeNotifier,
+                                  directionNotifier: _directionNotifier,
+                                  saveDirectionNotifier: _saveDirectionNotifier,
+                                  showWholeRoute: _showWholeRoute,
+                                  onSaveStart: () {
+                                    _isSavingNotifier.value = true;
+                                    widget.onSavingChanged?.call(true);
+                                  },
+                                  onSaveComplete: () {
+                                    _isSavingNotifier.value = false;
+                                    widget.onSavingChanged?.call(false);
+                                  },
+                                  isSavingNotifier: _isSavingNotifier,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         if (_isSavingNotifier.value)
                           Positioned.fill(
