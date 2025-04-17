@@ -31,6 +31,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   String _selectedAspectRatio = "9:16";
   bool _selectingStart = false;
   bool _selectingEnd = false;
+  double _imageLength = 3.0;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -674,6 +675,22 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     : (value) {
                                   setState(() {
                                     _animationController.duration = Duration(seconds: value.toInt());
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              const Text("Image Display Duration"),
+                              Slider(
+                                value: _imageLength,
+                                min: 2.0,
+                                max: 10.0,
+                                divisions: 16,
+                                label: "${_imageLength.toStringAsFixed(1)}s",
+                                onChanged: _isSavingNotifier.value
+                                    ? null
+                                    : (value) {
+                                  setState(() {
+                                    _imageLength = value;
                                   });
                                 },
                               ),
