@@ -1,14 +1,11 @@
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:journeyjournal/models/route_point.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
 import 'package:journeyjournal/utils/video_util.dart';
 import 'package:geolocator/geolocator.dart';
-import '../models/image_data.dart';
 
 class AnimationScreen extends StatefulWidget {
   final RouteModel? initialRoute;
@@ -34,8 +31,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   String _selectedAspectRatio = "9:16";
   bool _selectingStart = false;
   bool _selectingEnd = false;
-  bool _isImageDisplayed = false;
-  double _imageDisplayProgress = 0.0;
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -49,32 +44,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   final ValueNotifier<double> _markerSizeNotifier = ValueNotifier<double>(0.0);
   final ValueNotifier<double> _directionNotifier = ValueNotifier<double>(0.0);
   final ValueNotifier<double> _saveDirectionNotifier = ValueNotifier<double>(0.0);
-  final ValueNotifier<double> _currentImageOpacity = ValueNotifier<double>(0.0);
-  final ValueNotifier<double> _currentImageScale = ValueNotifier<double>(0.0);
-  final ValueNotifier<double> _nextImageOpacity = ValueNotifier<double>(0.0);
-  final ValueNotifier<double> _nextImageScale = ValueNotifier<double>(0.0);
 
   late AnimationController _animationController;
   late Animation<double> _progressAnimation;
-  Duration _animationDuration = const Duration(seconds: 5);
-  Duration _totalAnimationDuration = const Duration(seconds: 5);
+  final Duration _animationDuration = const Duration(seconds: 5);
   double _totalDistance = 0.0;
   static const double markerBaseSize = 25.0;
-
-  // Image animation
-  late AnimationController _currentImageController;
-  late AnimationController _nextImageController;
-  late Animation<double> _currentScaleAnimation;
-  late Animation<double> _currentOpacityAnimation;
-  late Animation<double> _nextScaleAnimation;
-  late Animation<double> _nextOpacityAnimation;
-  List<RoutePoint> _imagePoints = [];
-  int _currentImagePointIndex = 0;
-  List<ImageData> _currentImages = [];
-  int _currentImageIndex = 0;
-  int _nextImageIndex = -1;
-  bool _isPaused = false;
-  bool _isLastImageFading = false;
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -116,7 +91,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
             startIndex: currentRoute.startIndex,
             endIndex: currentRoute.endIndex,
           );
-          _setInitialCirclePosition();
           _selectingEnd = false;
           if (!_showWholeRoute) {
             _fitMapToRoute();
@@ -134,29 +108,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       vsync: this,
       duration: _animationDuration,
     );
-
-    // Image animation setup
-    _currentImageController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _nextImageController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _currentScaleAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _currentImageController, curve: Curves.easeInOut),
-    );
-    _currentOpacityAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _currentImageController, curve: Curves.easeInOut),
-    );
-    _nextScaleAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _nextImageController, curve: Curves.easeInOut),
-    );
-    _nextOpacityAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _nextImageController, curve: Curves.easeInOut),
-    );
-
     _loadRoute();
   }
 
@@ -181,18 +132,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         startIndex: currentRoute.startIndex,
         endIndex: currentRoute.endIndex,
       );
-      _imagePoints = currentRoute.routePoints
-          .asMap()
-          .entries
-          .where((entry) =>
-      entry.value.images.isNotEmpty &&
-          (currentRoute.startIndex <= entry.key &&
-              (currentRoute.endIndex == -1 || entry.key <= currentRoute.endIndex)))
-          .map((entry) => entry.value)
-          .toList();
-      int totalImages = _imagePoints.fold(0, (sum, point) => sum + point.images.length);
-      _totalAnimationDuration = Duration(seconds: _animationDuration.inSeconds + 3 * totalImages);
-      _animationController.duration = _animationDuration;
     }
 
     setState(() {});
@@ -208,9 +147,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       endIndex: _showWholeRoute ? null : currentRoute.endIndex,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
         setState(() {
           fitZoom = _mapController.camera.zoom;
           zoomLevel = _mapController.camera.zoom;
@@ -246,26 +183,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       _isSavingNotifier.value = false;
       _animationController.stop();
       _animationController.reset();
-      _currentImageController.reset();
-      _nextImageController.reset();
-      _currentImagePointIndex = 0;
-      _currentImageIndex = 0;
-      _nextImageIndex = -1;
-      _currentImages = [];
-      _isPaused = false;
-      _isLastImageFading = false;
-      _isImageDisplayed = false;
-      _imageDisplayProgress = 0.0;
-      _currentImageOpacity.value = 0.0;
-      _currentImageScale.value = 0.0;
-      _nextImageOpacity.value = 0.0;
-      _nextImageScale.value = 0.0;
       if (currentRoute.routePoints.isNotEmpty) {
         _circlePositionNotifier.value = currentRoute.routePoints[currentRoute.startIndex].point;
       }
       _markerSizeNotifier.value = 0.0;
-      double initialDirection = currentRoute.startIndex < currentRoute.endIndex &&
-          currentRoute.startIndex + 1 < currentRoute.routePoints.length
+      double initialDirection = currentRoute.startIndex < currentRoute.endIndex && currentRoute.startIndex + 1 < currentRoute.routePoints.length
           ? atan2(
         currentRoute.routePoints[currentRoute.startIndex + 1].point.longitude -
             currentRoute.routePoints[currentRoute.startIndex].point.longitude,
@@ -313,10 +235,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _handleMapTap(TapPosition tapPosition, LatLng tappedPoint) {
-    if (currentRoute.routePoints.isEmpty ||
-        _isSavingNotifier.value ||
-        _isAnimating ||
-        (!_selectingStart && !_selectingEnd)) return;
+    if (currentRoute.routePoints.isEmpty || _isSavingNotifier.value || _isAnimating || (!_selectingStart && !_selectingEnd)) return;
 
     int closestIndex = 0;
     double minDistance = double.infinity;
@@ -369,18 +288,19 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   }
 
   void _animateMarker() {
-    if (!_isAnimating ||
-        currentRoute.routePoints.length < 2 ||
-        currentRoute.startIndex < 0 ||
-        currentRoute.endIndex <= currentRoute.startIndex ||
-        currentRoute.endIndex >= currentRoute.routePoints.length) {
+    if (!_isAnimating || currentRoute.routePoints.length < 2 || currentRoute.startIndex < 0 || currentRoute.endIndex <= currentRoute.startIndex || currentRoute.endIndex >= currentRoute.routePoints.length) {
       setState(() {
         _isAnimating = false;
       });
       return;
     }
 
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    final previewDuration = Duration(
+      milliseconds: _animationDuration.inMilliseconds - 2000,
+    );
+    final scaleFactor = previewDuration.inMilliseconds / _animationDuration.inMilliseconds;
+
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0 / scaleFactor).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Curves.linear,
@@ -390,11 +310,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _markerSizeNotifier.value = markerBaseSize;
     LatLng? lastPosition;
     _progressAnimation.addListener(() {
-      if (_isPaused && !_isLastImageFading) return;
-
-      double progress = _progressAnimation.value;
+      double scaledProgress = _progressAnimation.value * scaleFactor;
       moveCircleAlongPath(
-        progress,
+        scaledProgress,
         currentRoute,
         _circlePositionNotifier,
         _totalDistance,
@@ -402,40 +320,17 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         endIndex: currentRoute.endIndex,
       );
       LatLng currentPosition = _circlePositionNotifier.value;
-      _directionNotifier.value =
-          calculateDirection(lastPosition, currentPosition, defaultDirection: _directionNotifier.value);
-      lastPosition = currentPosition;
-
-      if (_currentImagePointIndex < _imagePoints.length) {
-        final imagePoint = _imagePoints[_currentImagePointIndex];
-        final distance = Geolocator.distanceBetween(
-          currentPosition.latitude,
-          currentPosition.longitude,
-          imagePoint.point.latitude,
-          imagePoint.point.longitude,
-        );
-        if (distance < 50 && !_isPaused) {
-          _pauseAndShowImages(imagePoint);
-        }
+      if (lastPosition != null) {
+        double deltaLat = currentPosition.latitude - lastPosition!.latitude;
+        double deltaLng = currentPosition.longitude - lastPosition!.longitude;
+        _directionNotifier.value = atan2(deltaLng, deltaLat);
       }
+      lastPosition = currentPosition;
     });
 
     _animationController.reset();
     _animationController.forward().then((_) {
       _markerSizeNotifier.value = 0.0;
-      _currentImages = [];
-      _currentImageIndex = 0;
-      _nextImageIndex = -1;
-      _isPaused = false;
-      _isLastImageFading = false;
-      _isImageDisplayed = false;
-      _imageDisplayProgress = 0.0;
-      _currentImageOpacity.value = 0.0;
-      _currentImageScale.value = 0.0;
-      _nextImageOpacity.value = 0.0;
-      _nextImageScale.value = 0.0;
-      _currentImageController.reset();
-      _nextImageController.reset();
       if (currentRoute.endIndex > currentRoute.startIndex && currentRoute.endIndex < currentRoute.routePoints.length) {
         LatLng secondLast = currentRoute.routePoints[currentRoute.endIndex - 1].point;
         LatLng last = currentRoute.routePoints[currentRoute.endIndex].point;
@@ -452,87 +347,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     });
   }
 
-  void _pauseAndShowImages(RoutePoint point) async {
-    setState(() {
-      _isPaused = true;
-      _isImageDisplayed = true;
-      _currentImages = point.images;
-      _currentImageIndex = 0;
-      _nextImageIndex = -1;
-      _isLastImageFading = false;
-      _imageDisplayProgress = 0.0;
-      _circlePositionNotifier.value = point.point;
-    });
-
-    _animationController.stop();
-
-    for (int i = 0; i < _currentImages.length; i++) {
-      setState(() {
-        _currentImageIndex = i;
-        _nextImageIndex = i + 1 < _currentImages.length ? i + 1 : -1;
-        _isLastImageFading = i == _currentImages.length - 1;
-        _imageDisplayProgress = 0.0;
-      });
-
-      await _currentImageController.forward();
-      _currentImageOpacity.value = 1.0;
-      _currentImageScale.value = 1.0;
-      await Future.delayed(const Duration(seconds: 2));
-      if (_nextImageIndex >= 0) {
-        _nextImageController.forward();
-        _nextImageOpacity.value = 1.0;
-        _nextImageScale.value = 1.0;
-      }
-      await _currentImageController.reverse();
-      _currentImageOpacity.value = 0.0;
-      _currentImageScale.value = 0.0;
-
-      if (_nextImageIndex >= 0) {
-        setState(() {
-          _currentImageIndex = _nextImageIndex;
-          _nextImageIndex = _nextImageIndex + 1 < _currentImages.length ? _nextImageIndex + 1 : -1;
-          _isLastImageFading = _nextImageIndex == -1;
-          _imageDisplayProgress = 0.0;
-        });
-        _currentImageController.value = 1.0;
-        _currentImageOpacity.value = 1.0;
-        _currentImageScale.value = 1.0;
-        _nextImageController.reset();
-        _nextImageOpacity.value = 0.0;
-        _nextImageScale.value = 0.0;
-      }
-    }
-
-    setState(() {
-      _isPaused = false;
-      _isImageDisplayed = false;
-      _currentImages = [];
-      _currentImageIndex = 0;
-      _nextImageIndex = -1;
-      _isLastImageFading = false;
-      _imageDisplayProgress = 0.0;
-      _currentImageOpacity.value = 0.0;
-      _currentImageScale.value = 0.0;
-      _nextImageOpacity.value = 0.0;
-      _nextImageScale.value = 0.0;
-      _currentImagePointIndex++;
-    });
-
-    if (_currentImagePointIndex < _imagePoints.length) {
-      _animationController.forward();
-    }
-  }
-
-  Future<void> _updateFrameForSave(double progress, LatLng currentPoint) async {
-    _circlePositionNotifier.value = currentPoint;
-  }
-
   List<Marker> _buildMarkers({bool isSaving = false}) {
     final List<Marker> markers = [];
     final int startIndex = currentRoute.startIndex;
     final int endIndex = currentRoute.endIndex;
 
-    // Route point markers
     for (int i = 0; i < currentRoute.routePoints.length; i++) {
       if (isSaving && !_showWholeRoute && (i < startIndex || i > endIndex)) {
         continue;
@@ -574,7 +393,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                       child: Text(
                         routePoint.title,
                         style: const TextStyle(
-                          fontFamily: 'Princess Sofia',
                           fontWeight: FontWeight.bold,
                           fontSize: 10,
                           color: Colors.black,
@@ -591,148 +409,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         ),
       );
     }
-
-    // Moving marker
-    if (isSaving) {
-      markers.add(
-        Marker(
-          point: _circlePositionNotifier.value,
-          width: _markerSizeNotifier.value,
-          height: _markerSizeNotifier.value,
-          child: Transform.rotate(
-            angle: _saveDirectionNotifier.value,
-            child: Icon(
-              Icons.navigation,
-              color: Colors.orange,
-              size: _markerSizeNotifier.value,
-            ),
-          ),
-        ),
-      );
-    } else {
-      markers.add(
-        Marker(
-          point: _circlePositionNotifier.value,
-          width: _markerSizeNotifier.value,
-          height: _markerSizeNotifier.value,
-          child: Transform.rotate(
-            angle: _directionNotifier.value,
-            child: Icon(
-              Icons.navigation,
-              color: Colors.orange,
-              size: _markerSizeNotifier.value,
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Image marker
-    if (_isImageDisplayed && _currentImages.isNotEmpty && _currentImageIndex < _currentImages.length) {
-      print('Building image marker: index=$_currentImageIndex, progress=$_imageDisplayProgress');
-      final renderObject = repaintBoundaryKey.currentContext?.findRenderObject();
-      double widgetWidth = 576.0;
-      double widgetHeight = 1024.0;
-      if (renderObject is RenderBox) {
-        widgetWidth = renderObject.size.width;
-        widgetHeight = renderObject.size.height;
-      }
-      final imageSize = min(widgetWidth, widgetHeight) - 40;
-
-      double currentOpacity = 0.0;
-      double currentScale = 0.0;
-      double nextOpacity = 0.0;
-      double nextScale = 0.0;
-
-      if (_imageDisplayProgress <= 1.0) {
-        currentOpacity = _imageDisplayProgress;
-        currentScale = _imageDisplayProgress;
-      } else if (_imageDisplayProgress <= 3.0) {
-        currentOpacity = 1.0;
-        currentScale = 1.0;
-      } else if (_imageDisplayProgress <= 4.0) {
-        currentOpacity = 1.0 - (_imageDisplayProgress - 3.0);
-        currentScale = 1.0 - (_imageDisplayProgress - 3.0);
-      }
-
-      if (_nextImageIndex >= 0 && _imageDisplayProgress >= 3.0 && _imageDisplayProgress <= 4.0) {
-        nextOpacity = _imageDisplayProgress - 3.0;
-        nextScale = _imageDisplayProgress - 3.0;
-      } else if (_nextImageIndex >= 0 && _imageDisplayProgress > 4.0) {
-        nextOpacity = 1.0;
-        nextScale = 1.0;
-      }
-
-      _currentImageOpacity.value = currentOpacity;
-      _currentImageScale.value = currentScale;
-      _nextImageOpacity.value = nextOpacity;
-      _nextImageScale.value = nextScale;
-
-      markers.add(
-        Marker(
-          point: _mapController.camera.center,
-          width: imageSize,
-          height: imageSize,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              ValueListenableBuilder<double>(
-                valueListenable: _currentImageOpacity,
-                builder: (context, opacity, child) {
-                  return ValueListenableBuilder<double>(
-                    valueListenable: _currentImageScale,
-                    builder: (context, scale, child) {
-                      return Opacity(
-                        opacity: opacity,
-                        child: Transform.scale(
-                          scale: scale,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(_currentImages[_currentImageIndex].path),
-                              width: imageSize,
-                              height: imageSize,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-              if (_nextImageIndex >= 0 && _nextImageIndex < _currentImages.length)
-                ValueListenableBuilder<double>(
-                  valueListenable: _nextImageOpacity,
-                  builder: (context, opacity, child) {
-                    return ValueListenableBuilder<double>(
-                      valueListenable: _nextImageScale,
-                      builder: (context, scale, child) {
-                        return Opacity(
-                          opacity: opacity,
-                          child: Transform.scale(
-                            scale: scale,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(_currentImages[_nextImageIndex].path),
-                                width: imageSize,
-                                height: imageSize,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return markers;
   }
 
@@ -742,10 +418,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     final int startIndex = currentRoute.startIndex;
     final int endIndex = currentRoute.endIndex;
 
-    final effectivePoints = (isSaving && !_showWholeRoute &&
-        startIndex >= 0 &&
-        endIndex < currentRoute.routePoints.length &&
-        startIndex <= endIndex)
+    final effectivePoints = (isSaving && !_showWholeRoute && startIndex >= 0 && endIndex < currentRoute.routePoints.length && startIndex <= endIndex)
         ? currentRoute.routePoints.sublist(startIndex, endIndex + 1).map((rp) => rp.point).toList()
         : currentRoute.routePoints.map((rp) => rp.point).toList();
 
@@ -764,19 +437,12 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
 
   @override
   void dispose() {
-    _isSavingNotifier.value = false;
     _isSavingNotifier.dispose();
     _circlePositionNotifier.dispose();
     _markerSizeNotifier.dispose();
     _directionNotifier.dispose();
     _saveDirectionNotifier.dispose();
-    _currentImageOpacity.dispose();
-    _currentImageScale.dispose();
-    _nextImageOpacity.dispose();
-    _nextImageScale.dispose();
     _animationController.dispose();
-    _currentImageController.dispose();
-    _nextImageController.dispose();
     _mapController.dispose();
     super.dispose();
   }
@@ -870,6 +536,84 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 );
                               },
                             ),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _isSavingNotifier,
+                              builder: (context, isSaving, child) {
+                                if (isSaving) return const SizedBox.shrink();
+                                return ValueListenableBuilder<LatLng>(
+                                  valueListenable: _circlePositionNotifier,
+                                  builder: (context, position, child) {
+                                    return ValueListenableBuilder<double>(
+                                      valueListenable: _markerSizeNotifier,
+                                      builder: (context, size, child) {
+                                        return ValueListenableBuilder<double>(
+                                          valueListenable: _directionNotifier,
+                                          builder: (context, direction, child) {
+                                            return MarkerLayer(
+                                              markers: [
+                                                if (size > 0.0)
+                                                  Marker(
+                                                    point: position,
+                                                    width: size,
+                                                    height: size,
+                                                    child: Transform.rotate(
+                                                      angle: direction,
+                                                      child: Icon(
+                                                        Icons.navigation,
+                                                        color: Colors.orange,
+                                                        size: size,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _isSavingNotifier,
+                              builder: (context, isSaving, child) {
+                                if (!isSaving) return const SizedBox.shrink();
+                                return ValueListenableBuilder<LatLng>(
+                                  valueListenable: _circlePositionNotifier,
+                                  builder: (context, position, child) {
+                                    return ValueListenableBuilder<double>(
+                                      valueListenable: _markerSizeNotifier,
+                                      builder: (context, size, child) {
+                                        return ValueListenableBuilder<double>(
+                                          valueListenable: _saveDirectionNotifier,
+                                          builder: (context, direction, child) {
+                                            return MarkerLayer(
+                                              markers: [
+                                                if (size > 0.0)
+                                                  Marker(
+                                                    point: position,
+                                                    width: size,
+                                                    height: size,
+                                                    child: Transform.rotate(
+                                                      angle: direction,
+                                                      child: Icon(
+                                                        Icons.navigation,
+                                                        color: Colors.orange,
+                                                        size: size,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -884,8 +628,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 left: 10.0,
                 right: 10.0,
                 child: Material(
-                  color:
-                  (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
+                  color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
                   child: Stack(
                     children: [
                       Container(
@@ -903,18 +646,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   ElevatedButton(
-                                    onPressed: _isSavingNotifier.value || _isAnimating
-                                        ? null
-                                        : _startSelectingStartPoint,
+                                    onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingStartPoint,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: _selectingStart ? Colors.green[100] : null,
                                     ),
                                     child: const Text("Set Start Point"),
                                   ),
                                   ElevatedButton(
-                                    onPressed: _isSavingNotifier.value || _isAnimating
-                                        ? null
-                                        : _startSelectingEndPoint,
+                                    onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingEndPoint,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: _selectingEnd ? Colors.red[100] : null,
                                     ),
@@ -925,21 +664,16 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                               const SizedBox(height: 10),
                               const Text("Animation Duration"),
                               Slider(
-                                value: _animationDuration.inSeconds.toDouble(),
+                                value: _animationController.duration!.inSeconds.toDouble(),
                                 min: 5,
                                 max: 60,
-                                divisions: 55,
-                                label: "${_animationDuration.inSeconds}s",
+                                divisions: 56,
+                                label: "${_animationController.duration!.inSeconds}s",
                                 onChanged: _isSavingNotifier.value
                                     ? null
                                     : (value) {
                                   setState(() {
-                                    _animationDuration = Duration(seconds: value.toInt());
-                                    _animationController.duration = _animationDuration;
-                                    int totalImages = _imagePoints.fold(
-                                        0, (sum, point) => sum + point.images.length);
-                                    _totalAnimationDuration =
-                                        Duration(seconds: value.toInt() + 3 * totalImages);
+                                    _animationController.duration = Duration(seconds: value.toInt());
                                   });
                                 },
                               ),
@@ -1014,6 +748,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   initialZoom: zoomLevel,
                                   fitZoom: fitZoom,
                                   markerSizeNotifier: _markerSizeNotifier,
+                                  directionNotifier: _directionNotifier,
                                   saveDirectionNotifier: _saveDirectionNotifier,
                                   showWholeRoute: _showWholeRoute,
                                   onSaveStart: () {
@@ -1025,19 +760,6 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     widget.onSavingChanged?.call(false);
                                   },
                                   isSavingNotifier: _isSavingNotifier,
-                                  updateFrame: _updateFrameForSave,
-                                  totalDuration: _totalAnimationDuration,
-                                  imagePoints: _imagePoints,
-                                  isImageDisplayed: (value) => _isImageDisplayed = value,
-                                  setCurrentImages: (images) => _currentImages = images,
-                                  setCurrentImageIndex: (index) => _currentImageIndex = index,
-                                  setNextImageIndex: (index) => _nextImageIndex = index,
-                                  setImageDisplayProgress: (progress) => _imageDisplayProgress = progress,
-                                  currentImageOpacity: _currentImageOpacity,
-                                  currentImageScale: _currentImageScale,
-                                  nextImageOpacity: _nextImageOpacity,
-                                  nextImageScale: _nextImageScale,
-                                  cancelSaving: () => _isSavingNotifier.value = false,
                                 ),
                               ),
                             ],
