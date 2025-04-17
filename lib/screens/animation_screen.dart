@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:journeyjournal/models/image_data.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
@@ -34,6 +35,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   bool _selectingEnd = false;
   double _imageLength = 3.0;
   double _totalVideoLength = 0.0;
+  Map<String, int> _tagStates = {}; // 0: unset, 1: include (green), 2: exclude (red)
+  List<ImageData> _includedImages = [];
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -66,12 +69,22 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     _loadRoute();
   }
 
+  bool _isImageIncluded(ImageData image) {
+    bool hasGreen = _tagStates.values.any((state) => state == 1);
+    bool hasRedTag = image.tags.any((tag) => _tagStates[tag] == 2);
+    if (hasRedTag) return false;
+    if (!hasGreen) return true;
+    return image.tags.any((tag) => _tagStates[tag] == 1);
+  }
+
   double _calculateTotalVideoLength() {
     double animationDuration = _animationController.duration!.inSeconds.toDouble();
     if (!_showImages) return animationDuration;
-    int imageCount = currentRoute.routePoints
-        .fold(0, (sum, point) => sum + (point.images.isNotEmpty ? point.images.length : 0));
-    return animationDuration + (imageCount * _imageLength);
+    _includedImages = currentRoute.routePoints
+        .expand((point) => point.images)
+        .where(_isImageIncluded)
+        .toList();
+    return animationDuration + (_includedImages.length * _imageLength);
   }
 
   double _getAspectRatioValue() {
@@ -133,6 +146,16 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         currentRoute = await RouteModel.createNewRoute();
       } else {
         currentRoute = savedRoutes.last;
+      }
+    }
+
+    // Initialize tag states
+    _tagStates = {};
+    for (var point in currentRoute.routePoints) {
+      for (var image in point.images) {
+        for (var tag in image.tags) {
+          _tagStates[tag] ??= 0; // Default: unset
+        }
       }
     }
 
@@ -808,6 +831,30 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                               _totalVideoLength = _calculateTotalVideoLength();
                                             });
                                           },
+                                        ),
+                                        const SizedBox(height: 10),
+                                        const Text("Image Tags"),
+                                        const SizedBox(height: 5),
+                                        Wrap(
+                                          spacing: 8.0,
+                                          runSpacing: 4.0,
+                                          children: _tagStates.keys.map((tag) {
+                                            final state = _tagStates[tag] ?? 0;
+                                            return ChoiceChip(
+                                              label: Text(tag),
+                                              selected: state != 0,
+                                              selectedColor: state == 1 ? Colors.green[100] : Colors.red[100],
+                                              showCheckmark: false,
+                                              onSelected: _isSavingNotifier.value
+                                                  ? null
+                                                  : (bool selected) {
+                                                setState(() {
+                                                  _tagStates[tag] = (state + 1) % 3; // Cycle: 0 -> 1 -> 2 -> 0
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                });
+                                              },
+                                            );
+                                          }).toList(),
                                         ),
                                         const SizedBox(height: 10),
                                       ],
