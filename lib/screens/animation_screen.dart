@@ -32,6 +32,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   bool _selectingStart = false;
   bool _selectingEnd = false;
   double _imageLength = 3.0;
+  double _totalVideoLength = 0.0; // New: Store total video length
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -51,6 +52,26 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   final Duration _animationDuration = const Duration(seconds: 5);
   double _totalDistance = 0.0;
   static const double markerBaseSize = 25.0;
+
+  @override
+  void initState() {
+    super.initState();
+    currentRoute = widget.initialRoute ?? RouteModel(id: '', name: '');
+    _animationController = AnimationController(
+      vsync: this,
+      duration: _animationDuration,
+    );
+    _loadRoute();
+  }
+
+  // New: Calculate total video length (animation + images)
+  double _calculateTotalVideoLength() {
+    double animationDuration = _animationController.duration!.inSeconds.toDouble();
+    int imageCount = currentRoute.routePoints
+        .fold(0, (sum, point) => sum + (point.images.isNotEmpty ? point.images.length : 0));
+    // Future-proof: Can add tag filtering here, e.g., point.images.where((img) => img.tags.contains('include')).length
+    return animationDuration + (imageCount * _imageLength);
+  }
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -98,18 +119,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           }
         }
       }
+      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
     });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    currentRoute = widget.initialRoute ?? RouteModel(id: '', name: '');
-    _animationController = AnimationController(
-      vsync: this,
-      duration: _animationDuration,
-    );
-    _loadRoute();
   }
 
   Future<void> _loadRoute() async {
@@ -135,7 +146,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       );
     }
 
-    setState(() {});
+    setState(() {
+      _totalVideoLength = _calculateTotalVideoLength(); // Initialize total length
+    });
   }
 
   void _fitMapToRoute() {
@@ -153,6 +166,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           fitZoom = _mapController.camera.zoom;
           zoomLevel = _mapController.camera.zoom;
           mapPosition = _mapController.camera.center;
+          _totalVideoLength = _calculateTotalVideoLength(); // Update total length
         });
         if (currentRoute.routePoints.isNotEmpty) {
           _setInitialCirclePosition();
@@ -202,12 +216,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _isAnimating = false;
         _selectingStart = false;
         _selectingEnd = false;
+        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
       });
     } else if (currentRoute.routePoints.isNotEmpty) {
       setState(() {
         _isAnimating = true;
         _selectingStart = false;
         _selectingEnd = false;
+        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
       });
       _animateMarker();
     }
@@ -221,6 +237,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _selectingStart = true;
         _selectingEnd = false;
       }
+      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
     });
   }
 
@@ -232,6 +249,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _selectingEnd = true;
         _selectingStart = false;
       }
+      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
     });
   }
 
@@ -285,6 +303,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           }
         }
       }
+      _totalVideoLength = _calculateTotalVideoLength(); // Update total length
     });
   }
 
@@ -292,6 +311,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     if (!_isAnimating || currentRoute.routePoints.length < 2 || currentRoute.startIndex < 0 || currentRoute.endIndex <= currentRoute.startIndex || currentRoute.endIndex >= currentRoute.routePoints.length) {
       setState(() {
         _isAnimating = false;
+        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
       });
       return;
     }
@@ -344,6 +364,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       }
       setState(() {
         _isAnimating = false;
+        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
       });
     });
   }
@@ -675,6 +696,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     : (value) {
                                   setState(() {
                                     _animationController.duration = Duration(seconds: value.toInt());
+                                    _totalVideoLength = _calculateTotalVideoLength(); // Update total length
                                   });
                                 },
                               ),
@@ -684,16 +706,19 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                 value: _imageLength,
                                 min: 2.0,
                                 max: 10.0,
-                                divisions: 16,
+                                divisions: 16, // (10-2)/0.5 = 16
                                 label: "${_imageLength.toStringAsFixed(1)}s",
                                 onChanged: _isSavingNotifier.value
                                     ? null
                                     : (value) {
                                   setState(() {
                                     _imageLength = value;
+                                    _totalVideoLength = _calculateTotalVideoLength(); // Update total length
                                   });
                                 },
                               ),
+                              const SizedBox(height: 10),
+                              Text('Total Video Length: ${_totalVideoLength.toStringAsFixed(1)}s'), // New: Display total length
                               const SizedBox(height: 10),
                               Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
                               Row(
@@ -707,6 +732,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                         : (value) {
                                       setState(() {
                                         _showRouteTitles = value;
+                                        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
                                       });
                                     },
                                   ),
@@ -724,6 +750,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                       setState(() {
                                         _showWholeRoute = value;
                                         _fitMapToRoute();
+                                        _totalVideoLength = _calculateTotalVideoLength(); // Update total length
                                       });
                                     },
                                   ),
@@ -746,6 +773,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                     _selectingStart = false;
                                     _selectingEnd = false;
                                     _selectedAspectRatio = value!;
+                                    _totalVideoLength = _calculateTotalVideoLength(); // Update total length
                                   });
                                   WidgetsBinding.instance.addPostFrameCallback((_) {
                                     _fitMapToRoute();
