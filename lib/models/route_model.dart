@@ -27,7 +27,28 @@ class RouteModel {
   bool snapEndToLast;
 
   @HiveField(7)
-  List<String> tags; // New field for tag suggestions
+  List<String> tags;
+
+  @HiveField(8)
+  int? animationDurationSeconds;
+
+  @HiveField(9)
+  String? aspectRatio;
+
+  @HiveField(10)
+  bool? showRouteTitles;
+
+  @HiveField(11)
+  bool? showWholeRoute;
+
+  @HiveField(12)
+  bool? showImages;
+
+  @HiveField(13)
+  double? imageLength;
+
+  @HiveField(14)
+  Map<String, int>? tagStates;
 
   RouteModel({
     required this.id,
@@ -38,10 +59,17 @@ class RouteModel {
     this.snapStartToFirst = true,
     this.snapEndToLast = true,
     List<String>? tags,
+    this.animationDurationSeconds = 5,
+    this.aspectRatio = "9:16",
+    this.showRouteTitles = false,
+    this.showWholeRoute = true,
+    this.showImages = false,
+    this.imageLength = 3.0,
+    this.tagStates,
   })  : routePoints = routePoints ?? [],
         startPointId = startPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.first.id : ''),
         endPointId = endPointId ?? (routePoints != null && routePoints.isNotEmpty ? routePoints.last.id : ''),
-        tags = tags ?? ['highlight']; // Default with "highlight"
+        tags = tags ?? ['highlight'];
 
   int get startIndex => routePoints.indexWhere((p) => p.id == startPointId);
   int get endIndex => routePoints.indexWhere((p) => p.id == endPointId);
@@ -71,14 +99,12 @@ class RouteModel {
   Future<void> save() async {
     final box = await RouteModel.getRoutesBox();
     if (routePoints.isNotEmpty) {
-      // Handle snapping for start point
       if (snapStartToFirst || startPointId.isEmpty || !routePoints.any((p) => p.id == startPointId)) {
         startPointId = routePoints.first.id;
         snapStartToFirst = true;
       } else if (startPointId == routePoints.first.id) {
         snapStartToFirst = true;
       }
-      // Handle snapping for end point
       if (snapEndToLast || endPointId.isEmpty || !routePoints.any((p) => p.id == endPointId)) {
         endPointId = routePoints.last.id;
         snapEndToLast = true;
@@ -91,8 +117,7 @@ class RouteModel {
       snapStartToFirst = true;
       snapEndToLast = true;
     }
-    // Sync tags from images
-    final allTags = <String>{'highlight'}; // Always include "highlight"
+    final allTags = <String>{'highlight'};
     for (var point in routePoints) {
       for (var img in point.images) {
         allTags.addAll(img.tags);
