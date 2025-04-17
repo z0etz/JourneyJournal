@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:journeyjournal/models/image_data.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:journeyjournal/models/route_model.dart';
 import 'package:journeyjournal/utils/map_utils.dart';
@@ -28,9 +29,13 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   bool _isControlsExpanded = false;
   bool _showRouteTitles = false;
   bool _showWholeRoute = true;
+  bool _showImages = false;
   String _selectedAspectRatio = "9:16";
   bool _selectingStart = false;
   bool _selectingEnd = false;
+  double _imageLength = 3.0;
+  double _totalVideoLength = 0.0;
+  Map<String, int> _tagStates = {};
 
   final MapController _mapController = MapController();
   double zoomLevel = 10.0;
@@ -50,6 +55,36 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
   final Duration _animationDuration = const Duration(seconds: 5);
   double _totalDistance = 0.0;
   static const double markerBaseSize = 25.0;
+
+  @override
+  void initState() {
+    super.initState();
+    currentRoute = widget.initialRoute ?? RouteModel(id: '', name: '');
+    _animationController = AnimationController(
+      vsync: this,
+      duration: _animationDuration,
+    );
+    _totalVideoLength = _calculateTotalVideoLength();
+    _loadRoute();
+  }
+
+  bool _isImageIncluded(ImageData image) {
+    bool hasGreen = _tagStates.values.any((state) => state == 1);
+    bool hasRedTag = image.tags.any((tag) => _tagStates[tag] == 2);
+    if (hasRedTag) return false;
+    if (!hasGreen) return true;
+    return image.tags.any((tag) => _tagStates[tag] == 1);
+  }
+
+  double _calculateTotalVideoLength() {
+    double animationDuration = _animationController.duration!.inSeconds.toDouble();
+    if (!_showImages) return animationDuration;
+    final includedImages = currentRoute.routePoints
+        .expand((point) => point.images)
+        .where(_isImageIncluded)
+        .toList();
+    return animationDuration + (includedImages.length * _imageLength);
+  }
 
   double _getAspectRatioValue() {
     switch (_selectedAspectRatio) {
@@ -97,18 +132,8 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           }
         }
       }
+      _totalVideoLength = _calculateTotalVideoLength();
     });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    currentRoute = widget.initialRoute ?? RouteModel(id: '', name: '');
-    _animationController = AnimationController(
-      vsync: this,
-      duration: _animationDuration,
-    );
-    _loadRoute();
   }
 
   Future<void> _loadRoute() async {
@@ -123,6 +148,31 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       }
     }
 
+    _animationController.duration = Duration(seconds: currentRoute.animationDurationSeconds ?? 5);
+    _selectedAspectRatio = currentRoute.aspectRatio ?? "9:16";
+    _showRouteTitles = currentRoute.showRouteTitles ?? false;
+    _showWholeRoute = currentRoute.showWholeRoute ?? true;
+    _showImages = currentRoute.showImages ?? false;
+    _imageLength = currentRoute.imageLength ?? 3.0;
+    _tagStates = currentRoute.tagStates ?? {};
+
+    // Ensure all image tags are in _tagStates
+    for (var point in currentRoute.routePoints) {
+      for (var image in point.images) {
+        for (var tag in image.tags) {
+          _tagStates[tag] ??= 0;
+        }
+      }
+    }
+
+    print('Loaded animationDurationSeconds: ${currentRoute.animationDurationSeconds}');
+    print('Loaded aspectRatio: ${currentRoute.aspectRatio}');
+    print('Loaded showRouteTitles: ${currentRoute.showRouteTitles}');
+    print('Loaded showWholeRoute: ${currentRoute.showWholeRoute}');
+    print('Loaded showImages: ${currentRoute.showImages}');
+    print('Loaded imageLength: ${currentRoute.imageLength}');
+    print('Loaded tagStates: ${_tagStates.toString()}');
+
     if (currentRoute.routePoints.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _fitMapToRoute();
@@ -134,7 +184,9 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       );
     }
 
-    setState(() {});
+    setState(() {
+      _totalVideoLength = _calculateTotalVideoLength();
+    });
   }
 
   void _fitMapToRoute() {
@@ -152,6 +204,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           fitZoom = _mapController.camera.zoom;
           zoomLevel = _mapController.camera.zoom;
           mapPosition = _mapController.camera.center;
+          _totalVideoLength = _calculateTotalVideoLength();
         });
         if (currentRoute.routePoints.isNotEmpty) {
           _setInitialCirclePosition();
@@ -201,12 +254,14 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _isAnimating = false;
         _selectingStart = false;
         _selectingEnd = false;
+        _totalVideoLength = _calculateTotalVideoLength();
       });
     } else if (currentRoute.routePoints.isNotEmpty) {
       setState(() {
         _isAnimating = true;
         _selectingStart = false;
         _selectingEnd = false;
+        _totalVideoLength = _calculateTotalVideoLength();
       });
       _animateMarker();
     }
@@ -220,6 +275,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _selectingStart = true;
         _selectingEnd = false;
       }
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -231,6 +287,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
         _selectingEnd = true;
         _selectingStart = false;
       }
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -284,6 +341,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
           }
         }
       }
+      _totalVideoLength = _calculateTotalVideoLength();
     });
   }
 
@@ -291,6 +349,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
     if (!_isAnimating || currentRoute.routePoints.length < 2 || currentRoute.startIndex < 0 || currentRoute.endIndex <= currentRoute.startIndex || currentRoute.endIndex >= currentRoute.routePoints.length) {
       setState(() {
         _isAnimating = false;
+        _totalVideoLength = _calculateTotalVideoLength();
       });
       return;
     }
@@ -343,6 +402,7 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
       }
       setState(() {
         _isAnimating = false;
+        _totalVideoLength = _calculateTotalVideoLength();
       });
     });
   }
@@ -478,11 +538,11 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.black, width: 2),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black26,
                         blurRadius: 6,
-                        offset: Offset(0, 4),
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
@@ -627,116 +687,228 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                 top: 0,
                 left: 10.0,
                 right: 10.0,
-                child: Material(
-                  color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
-                  child: Stack(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).appBarTheme.backgroundColor,
-                          borderRadius: BorderRadius.circular(10.0),
-                        ),
-                        child: AbsorbPointer(
-                          absorbing: _isSavingNotifier.value,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  ElevatedButton(
-                                    onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingStartPoint,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _selectingStart ? Colors.green[100] : null,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.5,
+                  ),
+                  child: Material(
+                    color: (Theme.of(context).appBarTheme.backgroundColor ?? Colors.white).withValues(alpha: 0.8),
+                    child: Stack(
+                      children: [
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Expanded(
+                              child: SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).appBarTheme.backgroundColor,
+                                    borderRadius: BorderRadius.circular(10.0),
+                                  ),
+                                  child: AbsorbPointer(
+                                    absorbing: _isSavingNotifier.value,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            ElevatedButton(
+                                              onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingStartPoint,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: _selectingStart ? Colors.green[100] : null,
+                                              ),
+                                              child: const Text("Set Start Point"),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingEndPoint,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: _selectingEnd ? Colors.red[100] : null,
+                                              ),
+                                              child: const Text("Set End Point"),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+                                        const Text("Animation Duration"),
+                                        Slider(
+                                          value: _animationController.duration!.inSeconds.toDouble(),
+                                          min: 5,
+                                          max: 60,
+                                          divisions: 56,
+                                          label: "${_animationController.duration!.inSeconds}s",
+                                          onChanged: _isSavingNotifier.value
+                                              ? null
+                                              : (value) {
+                                            setState(() {
+                                              _animationController.duration = Duration(seconds: value.toInt());
+                                              _totalVideoLength = _calculateTotalVideoLength();
+                                              currentRoute.animationDurationSeconds = value.toInt();
+                                              print('Saving animationDurationSeconds: ${value.toInt()}');
+                                              currentRoute.save();
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Text('Total Video Length: ${_totalVideoLength.toStringAsFixed(1)}s'),
+                                        const SizedBox(height: 10),
+                                        Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
+                                        const SizedBox(height: 10),
+                                        const Text("Aspect Ratio"),
+                                        DropdownButton<String>(
+                                          value: _selectedAspectRatio,
+                                          items: ["9:16", "16:9", "3:2", "2:3", "1:1"].map((ratio) {
+                                            return DropdownMenuItem<String>(
+                                              value: ratio,
+                                              child: Text(ratio),
+                                            );
+                                          }).toList(),
+                                          onChanged: _isSavingNotifier.value
+                                              ? null
+                                              : (value) {
+                                            setState(() {
+                                              _selectingStart = false;
+                                              _selectingEnd = false;
+                                              _selectedAspectRatio = value!;
+                                              _totalVideoLength = _calculateTotalVideoLength();
+                                              currentRoute.aspectRatio = value;
+                                              print('Saving aspectRatio: $value');
+                                              currentRoute.save();
+                                            });
+                                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                                              _fitMapToRoute();
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("Show routepoint titles"),
+                                            Switch(
+                                              value: _showRouteTitles,
+                                              onChanged: _isSavingNotifier.value
+                                                  ? null
+                                                  : (value) {
+                                                setState(() {
+                                                  _showRouteTitles = value;
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                  currentRoute.showRouteTitles = value;
+                                                  print('Saving showRouteTitles: $value');
+                                                  currentRoute.save();
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("Zoom to whole route"),
+                                            Switch(
+                                              value: _showWholeRoute,
+                                              onChanged: _isSavingNotifier.value
+                                                  ? null
+                                                  : (value) {
+                                                setState(() {
+                                                  _showWholeRoute = value;
+                                                  _fitMapToRoute();
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                  currentRoute.showWholeRoute = value;
+                                                  print('Saving showWholeRoute: $value');
+                                                  currentRoute.save();
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("Show Images"),
+                                            Switch(
+                                              value: _showImages,
+                                              onChanged: _isSavingNotifier.value
+                                                  ? null
+                                                  : (value) {
+                                                setState(() {
+                                                  _showImages = value;
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                  currentRoute.showImages = value;
+                                                  print('Saving showImages: $value');
+                                                  currentRoute.save();
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+                                        const Text("Image Display Duration"),
+                                        Slider(
+                                          value: _imageLength,
+                                          min: 2.0,
+                                          max: 10.0,
+                                          divisions: 16,
+                                          label: "${_imageLength.toStringAsFixed(1)}s",
+                                          onChanged: _isSavingNotifier.value
+                                              ? null
+                                              : (value) {
+                                            setState(() {
+                                              _imageLength = value;
+                                              _totalVideoLength = _calculateTotalVideoLength();
+                                              currentRoute.imageLength = value;
+                                              print('Saving imageLength: $value');
+                                              currentRoute.save();
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 10),
+                                        const Text("Image Tags"),
+                                        const SizedBox(height: 5),
+                                        Wrap(
+                                          spacing: 8.0,
+                                          runSpacing: 4.0,
+                                          children: _tagStates.keys.map((tag) {
+                                            final state = _tagStates[tag] ?? 0;
+                                            return ChoiceChip(
+                                              label: Text(tag),
+                                              selected: state != 0,
+                                              selectedColor: state == 1 ? Colors.green[100] : Colors.red[100],
+                                              showCheckmark: false,
+                                              onSelected: _isSavingNotifier.value
+                                                  ? null
+                                                  : (bool selected) {
+                                                setState(() {
+                                                  _tagStates[tag] = (state + 1) % 3;
+                                                  _totalVideoLength = _calculateTotalVideoLength();
+                                                  currentRoute.tagStates = Map.from(_tagStates);
+                                                  print('Saving tagStates: ${_tagStates.toString()}');
+                                                  currentRoute.save();
+                                                });
+                                              },
+                                            );
+                                          }).toList(),
+                                        ),
+                                        const SizedBox(height: 10),
+                                      ],
                                     ),
-                                    child: const Text("Set Start Point"),
                                   ),
-                                  ElevatedButton(
-                                    onPressed: _isSavingNotifier.value || _isAnimating ? null : _startSelectingEndPoint,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _selectingEnd ? Colors.red[100] : null,
-                                    ),
-                                    child: const Text("Set End Point"),
-                                  ),
-                                ],
+                                ),
                               ),
-                              const SizedBox(height: 10),
-                              const Text("Animation Duration"),
-                              Slider(
-                                value: _animationController.duration!.inSeconds.toDouble(),
-                                min: 5,
-                                max: 60,
-                                divisions: 56,
-                                label: "${_animationController.duration!.inSeconds}s",
-                                onChanged: _isSavingNotifier.value
-                                    ? null
-                                    : (value) {
-                                  setState(() {
-                                    _animationController.duration = Duration(seconds: value.toInt());
-                                  });
-                                },
+                            ),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 10.0),
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.only(
+                                  bottomLeft: Radius.circular(10.0),
+                                  bottomRight: Radius.circular(10.0),
+                                ),
                               ),
-                              const SizedBox(height: 10),
-                              Text('Zoom Level: ${zoomLevel.toStringAsFixed(1)}'),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text("Show routepoint titles"),
-                                  Switch(
-                                    value: _showRouteTitles,
-                                    onChanged: _isSavingNotifier.value
-                                        ? null
-                                        : (value) {
-                                      setState(() {
-                                        _showRouteTitles = value;
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text("Zoom to whole route"),
-                                  Switch(
-                                    value: _showWholeRoute,
-                                    onChanged: _isSavingNotifier.value
-                                        ? null
-                                        : (value) {
-                                      setState(() {
-                                        _showWholeRoute = value;
-                                        _fitMapToRoute();
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              const Text("Aspect Ratio"),
-                              DropdownButton<String>(
-                                value: _selectedAspectRatio,
-                                items: ["9:16", "16:9", "3:2", "2:3", "1:1"].map((ratio) {
-                                  return DropdownMenuItem<String>(
-                                    value: ratio,
-                                    child: Text(ratio),
-                                  );
-                                }).toList(),
-                                onChanged: _isSavingNotifier.value
-                                    ? null
-                                    : (value) {
-                                  setState(() {
-                                    _selectingStart = false;
-                                    _selectingEnd = false;
-                                    _selectedAspectRatio = value!;
-                                  });
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    _fitMapToRoute();
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: 10),
-                              Center(
+                              child: Center(
                                 child: SaveButton(
                                   mapKey: repaintBoundaryKey,
                                   frameCount: frameCount,
@@ -762,27 +934,27 @@ class _AnimationScreenState extends State<AnimationScreen> with TickerProviderSt
                                   isSavingNotifier: _isSavingNotifier,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ),
-                      if (_isSavingNotifier.value)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.grey.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(10.0),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 4.0,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                        if (_isSavingNotifier.value)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(10.0),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4.0,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
